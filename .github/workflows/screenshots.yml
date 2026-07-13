@@ -23,7 +23,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          token: ${{ secrets.UFO_FILES_WORKFLOW_TOKEN }}
           ref: main
           fetch-depth: 0
       - name: Set up Node
