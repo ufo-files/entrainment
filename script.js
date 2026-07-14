@@ -37,6 +37,7 @@ const elements = {
   panCycle: document.querySelector("#pan-cycle"),
   panCycleOutput: document.querySelector("#pan-cycle-output"),
   volume: document.querySelector("#volume"),
+  transportToggle: document.querySelector("#transport-toggle"),
   audioToggle: document.querySelector("#audio-toggle"),
   audioToggleLabel: document.querySelector("#audio-toggle-label"),
   reset: document.querySelector("#reset"),
@@ -122,6 +123,10 @@ function setProgramsOpen(open) {
 
 function setRunning(running) {
   document.body.classList.toggle("audio-paused", !running);
+  elements.transportToggle.hidden = false;
+  elements.transportToggle.setAttribute("aria-label", running ? "Pause audio" : "Resume audio");
+  elements.transportToggle.title = running ? "Pause audio" : "Resume audio";
+  elements.transportToggle.querySelector(".control-mark").className = `control-mark ${running ? "pause-mark" : "play-mark"}`;
   elements.audioToggleLabel.textContent = running ? "Pause" : "Resume";
   elements.audioToggle.querySelector(".control-mark").className = `control-mark ${running ? "pause-mark" : "play-mark"}`;
   elements.status.textContent = running ? "Playing stereo signal" : "Audio paused";
@@ -176,6 +181,7 @@ function resetSession() {
 }
 
 elements.start.addEventListener("click", () => startAudio());
+elements.transportToggle.addEventListener("click", () => toggleAudio());
 elements.audioToggle.addEventListener("click", () => toggleAudio());
 elements.reset.addEventListener("click", resetSession);
 elements.controlsToggle.addEventListener("click", () => {

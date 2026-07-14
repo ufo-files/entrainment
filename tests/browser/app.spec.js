@@ -11,6 +11,14 @@ test("starts the stereo engine and switches to a three-pair program", async ({ p
   await page.getByRole("button", { name: "Start audio" }).click();
   await expect(page.locator("body")).toHaveClass(/has-started/);
   await expect(page.locator("#status")).toHaveText("Playing stereo signal");
+  await expect(page.getByRole("button", { name: "Pause audio" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Pause audio" }).click();
+  await expect(page.locator("#status")).toHaveText("Audio paused");
+  await expect(page.getByRole("button", { name: "Resume audio" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Resume audio" }).click();
+  await expect(page.locator("#status")).toHaveText("Playing stereo signal");
 
   await page.getByRole("button", { name: /Fig\. 3B/ }).click();
   await expect(page.locator("#pair-readout .pair-item")).toHaveCount(3);

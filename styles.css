@@ -90,7 +90,7 @@ a {
   right: max(12px, env(safe-area-inset-right));
   z-index: 10;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(170px, 260px) auto;
+  grid-template-columns: minmax(0, 1fr) auto minmax(170px, 260px) auto auto;
   align-items: center;
   min-height: 64px;
   padding: 8px 12px;
@@ -215,6 +215,21 @@ input[type="range"] {
   place-content: center;
   gap: 5px;
   padding: 0;
+}
+
+.transport-button {
+  display: inline-grid;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  place-content: center;
+  padding: 0;
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.transport-button[hidden] {
+  display: none;
 }
 
 .menu-button span {
@@ -603,7 +618,7 @@ fieldset select {
 
 @media (max-width: 960px) {
   .topbar {
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
   }
 
   .header-volume {
@@ -662,6 +677,12 @@ fieldset select {
   }
 
   .menu-button {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+  }
+
+  .transport-button {
     width: 36px;
     min-width: 36px;
     height: 36px;
