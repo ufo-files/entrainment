@@ -113,6 +113,7 @@ export function calculateTelemetryMetrics(leftSamples, rightSamples) {
       differenceRms: 0,
       leftDbfs: -120,
       rightDbfs: -120,
+      differenceDbfs: -120,
       correlation: 0,
     };
   }
@@ -146,6 +147,7 @@ export function calculateTelemetryMetrics(leftSamples, rightSamples) {
     differenceRms,
     leftDbfs: toDbfs(leftRms),
     rightDbfs: toDbfs(rightRms),
+    differenceDbfs: toDbfs(differenceRms),
     correlation,
   };
 }

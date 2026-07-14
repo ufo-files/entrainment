@@ -81,9 +81,11 @@ test("telemetry metrics measure channel level, difference, and correlation", () 
   const identical = calculateTelemetryMetrics(left, right);
   assert.ok(Math.abs(identical.leftRms - Math.SQRT1_2) < 1e-6);
   assert.equal(identical.differenceRms, 0);
+  assert.equal(identical.differenceDbfs, -120);
   assert.equal(identical.correlation, 1);
 
   const inverted = calculateTelemetryMetrics(left, Float32Array.from([-1, 0, 1, 0]));
   assert.equal(inverted.correlation, -1);
   assert.ok(inverted.differenceRms > identical.leftRms);
+  assert.ok(inverted.differenceDbfs > identical.differenceDbfs);
 });

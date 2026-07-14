@@ -17,17 +17,12 @@ export class SignalVisualizer {
     this.lastTimestamp = null;
     this.lastTelemetryUpdate = 0;
     this.displayMetrics = null;
-    this.pointer = { x: 0, y: 0, targetX: 0, targetY: 0 };
     this.reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     this.resize = this.resize.bind(this);
     this.render = this.render.bind(this);
-    this.onPointerMove = this.onPointerMove.bind(this);
-    this.onPointerLeave = this.onPointerLeave.bind(this);
 
     window.addEventListener("resize", this.resize, { passive: true });
-    window.addEventListener("pointermove", this.onPointerMove, { passive: true });
-    window.addEventListener("pointerleave", this.onPointerLeave, { passive: true });
     this.resize();
     requestAnimationFrame(this.render);
   }
@@ -43,23 +38,11 @@ export class SignalVisualizer {
     this.lastTimestamp = null;
   }
 
-  onPointerMove(event) {
-    this.pointer.targetX = (event.clientX / this.width - 0.5) * 2;
-    this.pointer.targetY = (event.clientY / this.height - 0.5) * 2;
-  }
-
-  onPointerLeave() {
-    this.pointer.targetX = 0;
-    this.pointer.targetY = 0;
-  }
-
   render(timestamp) {
     if (this.lastTimestamp === null) this.lastTimestamp = timestamp;
     const delta = Math.min(0.05, Math.max(0, (timestamp - this.lastTimestamp) / 1000));
     this.lastTimestamp = timestamp;
     if (!this.reducedMotion && this.isRunning()) this.elapsed += delta;
-    this.pointer.x += (this.pointer.targetX - this.pointer.x) * Math.min(1, delta * 3);
-    this.pointer.y += (this.pointer.targetY - this.pointer.y) * Math.min(1, delta * 3);
     this.draw(timestamp);
     requestAnimationFrame(this.render);
   }
@@ -73,10 +56,10 @@ export class SignalVisualizer {
     const telemetryMode = telemetry ? (this.isRunning() ? "live" : "paused") : "model";
     const compact = this.width < 720;
     const headerSpace = compact ? 86 : 96;
-    const footerSpace = compact ? 182 : 180;
+    const footerSpace = compact ? 72 : 130;
     const availableHeight = Math.max(180, this.height - headerSpace - footerSpace);
-    const centerX = this.width / 2 + this.pointer.x * Math.min(18, this.width * 0.02);
-    const centerY = headerSpace + availableHeight / 2 + this.pointer.y * 10;
+    const centerX = this.width / 2;
+    const centerY = headerSpace + availableHeight / 2;
     const fieldRadius = Math.min(this.width * (compact ? 0.38 : 0.28), availableHeight * 0.42, 250);
     const pace = this.elapsed * 0.55;
 
@@ -92,7 +75,7 @@ export class SignalVisualizer {
     this.drawGrid(ctx, centerY, availableHeight, compact);
     this.drawChannelLabels(ctx, centerY, fieldRadius, pairs, displayMetrics, compact);
     if (telemetry) {
-      this.drawLiveField(ctx, centerX, centerY, fieldRadius, telemetry, metrics);
+      this.drawLiveField(ctx, centerX, centerY, fieldRadius, metrics);
       this.drawLiveTraces(ctx, centerX, centerY, fieldRadius, telemetry, compact);
       this.drawLiveCore(ctx, centerX, centerY, fieldRadius, displayMetrics);
     } else {
@@ -138,35 +121,22 @@ export class SignalVisualizer {
     ctx.restore();
   }
 
-  drawLiveField(ctx, x, y, radius, telemetry, metrics) {
-    const { left, right } = telemetry;
-    const sampleCount = Math.min(left.length, right.length);
+  drawLiveField(ctx, x, y, radius, metrics) {
     const rings = Math.max(12, Math.round(radius / 9));
-    const points = Math.max(96, Math.round(radius * 0.7));
-    const amplitude = Math.min(1, metrics.differenceRms * 7);
+    const difference = Math.min(1, metrics.differenceRms * 8);
+    const correlation = metrics.correlation;
 
     ctx.save();
     ctx.translate(x, y);
     ctx.lineWidth = 1;
     for (let ring = rings; ring >= 1; ring -= 1) {
       const ratio = ring / rings;
-      const baseHorizontal = radius * ratio;
-      const baseVertical = radius * ratio * 0.72;
-      const deformationScale = radius * (0.1 + (1 - ratio) * 0.12);
-      ctx.strokeStyle = `rgba(17, 17, 17, ${0.05 + (1 - ratio) * 0.16 + amplitude * 0.04})`;
+      const horizontal = radius * ratio * (1 + correlation * 0.08);
+      const vertical = radius * ratio * 0.72 * (1 - correlation * 0.08);
+      const deformation = difference * radius * (0.012 + (1 - ratio) * 0.018);
+      ctx.strokeStyle = `rgba(17, 17, 17, ${0.05 + (1 - ratio) * 0.16 + difference * 0.04})`;
       ctx.beginPath();
-      for (let point = 0; point <= points; point += 1) {
-        const angle = (point / points) * TAU;
-        const sampleIndex = (Math.floor((point / points) * sampleCount) + ring * 37) % sampleCount;
-        const difference = left[sampleIndex] - right[sampleIndex];
-        const horizontal = baseHorizontal + difference * deformationScale;
-        const vertical = baseVertical + difference * deformationScale * 0.72;
-        const pointX = Math.cos(angle) * horizontal;
-        const pointY = Math.sin(angle) * vertical;
-        if (point === 0) ctx.moveTo(pointX, pointY);
-        else ctx.lineTo(pointX, pointY);
-      }
-      ctx.closePath();
+      ctx.ellipse(0, 0, horizontal + deformation, vertical + deformation * 0.72, 0, 0, TAU);
       ctx.stroke();
     }
     ctx.restore();
@@ -220,9 +190,6 @@ export class SignalVisualizer {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("LIVE", 0, 0);
-    ctx.fillStyle = "rgba(17, 17, 17, 0.62)";
-    ctx.font = `${Math.max(8, radius * 0.034)}px "SF Mono", ui-monospace, monospace`;
-    ctx.fillText(`CORR ${metrics.correlation.toFixed(2)}`, 0, core + radius * 0.19);
     ctx.restore();
   }
 

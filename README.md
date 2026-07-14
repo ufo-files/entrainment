@@ -69,8 +69,10 @@ Audio starts only after a user gesture, as required by modern browsers.
 
 Before audio starts, the canvas is a mathematical preview of the configured
 carrier pair. During playback, the left and right traces are drawn from the
-actual PCM stream sent to each output channel. The center field maps the live
-sample-by-sample left-minus-right signal; its center reports stereo correlation.
+actual PCM stream sent to each output channel. The center field maps live
+stereo-difference RMS into ring deformation and correlation into ring aspect;
+its center reports the same correlation snapshot. The field has no pointer or
+decorative rotational motion.
 
 ## Project Links
 

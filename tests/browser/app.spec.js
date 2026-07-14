@@ -15,8 +15,10 @@ test("starts the stereo engine and switches to a three-pair program", async ({ p
   await expect(page.locator("#telemetry-mode")).toHaveText("Live PCM");
   await expect(page.locator("#left-level")).not.toHaveText("--");
   await expect(page.locator("#right-level")).not.toHaveText("--");
+  await expect(page.locator("#difference-level")).not.toHaveText("--");
   await expect.poll(async () => Number(await page.locator("#left-level").textContent())).toBeGreaterThan(-100);
   await expect.poll(async () => Number(await page.locator("#right-level").textContent())).toBeGreaterThan(-100);
+  await expect.poll(async () => Number(await page.locator("#difference-level").textContent())).toBeGreaterThan(-100);
   await expect.poll(async () => Number(await page.locator("#stereo-correlation").textContent())).toBeGreaterThanOrEqual(-1);
   await expect.poll(async () => Number(await page.locator("#stereo-correlation").textContent())).toBeLessThanOrEqual(1);
 
@@ -60,6 +62,8 @@ test("mobile drawers remain inside the viewport", async ({ page }) => {
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Open controls" }).click();
   await expect(page.locator("#controls-panel")).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, 0)");
+  await expect(page.locator("#controls-panel")).toHaveCSS("border-right-width", "1px");
+  await expect(page.locator("#controls-panel")).toHaveCSS("border-bottom-width", "1px");
   const controlsBox = await page.locator("#controls-panel").boundingBox();
   expect(controlsBox).not.toBeNull();
   expect(controlsBox.x).toBeGreaterThanOrEqual(0);

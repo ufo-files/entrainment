@@ -17,6 +17,7 @@ const elements = {
   telemetryMode: document.querySelector("#telemetry-mode"),
   leftLevel: document.querySelector("#left-level"),
   rightLevel: document.querySelector("#right-level"),
+  differenceLevel: document.querySelector("#difference-level"),
   stereoCorrelation: document.querySelector("#stereo-correlation"),
   start: document.querySelector("#start"),
   startOverlay: document.querySelector("#start-overlay"),
@@ -69,11 +70,13 @@ new SignalVisualizer(
     if (!metrics) {
       elements.leftLevel.textContent = "--";
       elements.rightLevel.textContent = "--";
+      elements.differenceLevel.textContent = "--";
       elements.stereoCorrelation.textContent = "--";
       return;
     }
     elements.leftLevel.textContent = metrics.leftDbfs.toFixed(1);
     elements.rightLevel.textContent = metrics.rightDbfs.toFixed(1);
+    elements.differenceLevel.textContent = metrics.differenceDbfs.toFixed(1);
     elements.stereoCorrelation.textContent = metrics.correlation.toFixed(2);
   },
 );
