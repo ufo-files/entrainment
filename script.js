@@ -69,6 +69,7 @@ new SignalVisualizer(
   () => config,
   () => engine.running || !document.body.classList.contains("has-started"),
   () => engine.readTelemetry(),
+  () => engine.readSpatialState(),
   (metrics, mode) => {
     elements.telemetryMode.textContent = mode === "live" ? "Live PCM" : mode === "paused" ? "Paused PCM" : "Model";
     elements.telemetryMode.dataset.mode = mode;
@@ -128,6 +129,13 @@ function renderState() {
   elements.carrierFrequencyLabel.textContent = isSpatial ? "Base carrier" : "Left carrier";
   elements.beatFrequencyLabel.textContent = isSpatial ? "Contour rate" : "Difference";
   elements.signalCanvas.dataset.presentationMode = config.presentationMode;
+  elements.signalCanvas.dataset.visualization = isSpatial ? "spatial-soundfield" : "mid-side-vectorscope";
+  elements.signalCanvas.setAttribute(
+    "aria-label",
+    isSpatial
+      ? "Immersive spatial soundfield with live PCM rings and the current HRTF source position"
+      : "Stereo signal model with live left and right PCM traces and a normalized mid-side vectorscope",
+  );
   elements.programSummary.textContent = isSpatial
     ? pairs.length === 1
       ? `${formatFrequency(pairs[0].left)} carrier / ${formatFrequency(pairs[0].difference)} contour`

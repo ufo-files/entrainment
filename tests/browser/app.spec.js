@@ -45,11 +45,16 @@ test("starts the stereo engine and switches to a three-pair program", async ({ p
   await expect(page.locator("#pink-level-output")).toHaveText("-20 dB");
   await page.getByLabel("Spatial", { exact: true }).check();
   await expect(page.locator("#signal-canvas")).toHaveAttribute("data-presentation-mode", "spatial");
+  await expect(page.locator("#signal-canvas")).toHaveAttribute("data-visualization", "spatial-soundfield");
+  await expect(page.locator("#signal-canvas")).toHaveAttribute("aria-label", /current HRTF source position/);
   await expect(page.locator("#pair-count")).toHaveText("1 spatial carrier");
   await expect(page.locator("#program-summary")).toContainText("carrier / 4 Hz contour");
   await expect(page.locator("#status")).toHaveText("Playing spatial signal");
   await expect.poll(async () => Number(await page.locator("#left-level").textContent())).toBeGreaterThan(-100);
   await expect.poll(async () => Number(await page.locator("#right-level").textContent())).toBeGreaterThan(-100);
+
+  await page.getByLabel("Binaural", { exact: true }).check();
+  await expect(page.locator("#signal-canvas")).toHaveAttribute("data-visualization", "mid-side-vectorscope");
 
   expect(errors).toEqual([]);
 });

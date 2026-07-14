@@ -2,6 +2,7 @@ import { calculateTelemetryMetrics, getCarrierPairs } from "./audio-model.js";
 
 const TAU = Math.PI * 2;
 const SCOPE_HISTORY_LENGTH = 7;
+const SPATIAL_HISTORY_LENGTH = 64;
 
 export function encodeMidSide(left, right) {
   return {
@@ -10,13 +11,23 @@ export function encodeMidSide(left, right) {
   };
 }
 
+export function spatialPoint(angle, radius = 1) {
+  const x = Math.sin(angle) * radius;
+  const y = -Math.cos(angle) * radius;
+  return {
+    x: Math.abs(x) < 1e-12 ? 0 : x,
+    y: Math.abs(y) < 1e-12 ? 0 : y,
+  };
+}
+
 export class SignalVisualizer {
-  constructor(canvas, getConfig, isRunning, getTelemetry, onTelemetry = () => {}) {
+  constructor(canvas, getConfig, isRunning, getTelemetry, getSpatialState, onTelemetry = () => {}) {
     this.canvas = canvas;
     this.context = canvas.getContext("2d", { alpha: false });
     this.getConfig = getConfig;
     this.isRunning = isRunning;
     this.getTelemetry = getTelemetry;
+    this.getSpatialState = getSpatialState;
     this.onTelemetry = onTelemetry;
     this.width = 0;
     this.height = 0;
@@ -26,6 +37,10 @@ export class SignalVisualizer {
     this.lastTelemetryUpdate = 0;
     this.displayMetrics = null;
     this.scopeHistory = [];
+    this.spatialHistory = [];
+    this.spatialMid = null;
+    this.spatialSide = null;
+    this.lastPresentationMode = null;
     this.scopeGain = 1;
     this.reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -47,6 +62,7 @@ export class SignalVisualizer {
     this.context.setTransform(this.pixelRatio, 0, 0, this.pixelRatio, 0, 0);
     this.lastTimestamp = null;
     this.scopeHistory = [];
+    this.spatialHistory = [];
   }
 
   render(timestamp) {
@@ -65,13 +81,21 @@ export class SignalVisualizer {
     const telemetry = this.getTelemetry();
     const metrics = telemetry ? calculateTelemetryMetrics(telemetry.left, telemetry.right) : null;
     const telemetryMode = telemetry ? (this.isRunning() ? "live" : "paused") : "model";
+    const spatial = config.presentationMode === "spatial";
+    if (config.presentationMode !== this.lastPresentationMode) {
+      this.scopeHistory = [];
+      this.spatialHistory = [];
+      this.lastPresentationMode = config.presentationMode;
+    }
     const compact = this.width < 720;
     const headerSpace = compact ? 86 : 96;
     const footerSpace = compact ? 72 : 130;
     const availableHeight = Math.max(180, this.height - headerSpace - footerSpace);
     const centerX = this.width / 2;
     const centerY = headerSpace + availableHeight / 2;
-    const fieldRadius = Math.min(this.width * (compact ? 0.38 : 0.28), availableHeight * 0.42, 250);
+    const fieldRadius = spatial
+      ? Math.min(this.width * (compact ? 0.43 : 0.32), availableHeight * 0.48, 340)
+      : Math.min(this.width * (compact ? 0.38 : 0.28), availableHeight * 0.42, 250);
     const pace = this.elapsed * 0.55;
 
     if (timestamp - this.lastTelemetryUpdate >= 180) {
@@ -83,6 +107,18 @@ export class SignalVisualizer {
 
     ctx.fillStyle = "#f6f5ef";
     ctx.fillRect(0, 0, this.width, this.height);
+    if (spatial) {
+      const spatialState = this.getSpatialState?.() ?? this.getModelSpatialState(config);
+      this.drawSpatialGuides(ctx, centerX, centerY, fieldRadius, compact, spatialState.positionCount);
+      this.drawChannelLabels(ctx, centerY, fieldRadius, pairs, config, displayMetrics, compact);
+      if (telemetry) {
+        this.drawLiveSpatialField(ctx, centerX, centerY, fieldRadius, telemetry, spatialState, config, compact);
+      } else {
+        this.drawModelSpatialField(ctx, centerX, centerY, fieldRadius, pairs, spatialState, config, compact);
+      }
+      this.drawSpatialPosition(ctx, centerX, centerY, fieldRadius, spatialState, compact);
+      return;
+    }
     this.drawGrid(ctx, centerY, availableHeight, compact);
     this.drawChannelLabels(ctx, centerY, fieldRadius, pairs, config, displayMetrics, compact);
     this.drawScopeGuides(ctx, centerX, centerY, fieldRadius, compact);
@@ -94,6 +130,194 @@ export class SignalVisualizer {
       this.drawModelTraces(ctx, centerX, centerY, fieldRadius, pairs, config, pace, compact);
       this.drawModelVectorscope(ctx, centerX, centerY, fieldRadius, pairs, config, pace, compact);
     }
+  }
+
+  getModelSpatialState(config) {
+    const progress = (this.elapsed / config.panCycleSeconds) % 1;
+    const angle = progress * TAU;
+    return { angle, progress, ...spatialPoint(angle), positionCount: 12 };
+  }
+
+  drawSpatialGuides(ctx, centerX, centerY, radius, compact, positionCount) {
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.lineWidth = 1;
+    for (const scale of [0.28, 0.52, 0.76, 1]) {
+      ctx.strokeStyle = scale === 1 ? "rgba(17, 17, 17, 0.2)" : "rgba(17, 17, 17, 0.075)";
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * scale, 0, TAU);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = "rgba(17, 17, 17, 0.1)";
+    ctx.beginPath();
+    ctx.moveTo(-radius, 0);
+    ctx.lineTo(radius, 0);
+    ctx.moveTo(0, -radius);
+    ctx.lineTo(0, radius);
+    ctx.stroke();
+
+    for (let index = 0; index < positionCount; index += 1) {
+      const point = spatialPoint((index / positionCount) * TAU, radius);
+      ctx.fillStyle = "rgba(17, 17, 17, 0.34)";
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, compact ? 1.75 : 2.1, 0, TAU);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = "rgba(17, 17, 17, 0.45)";
+    ctx.font = `${compact ? 8 : 9}px "SF Mono", ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.fillText("FRONT", 0, -radius - 8);
+    ctx.textBaseline = "top";
+    ctx.fillText("REAR", 0, radius + 8);
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    ctx.fillText("L", -radius - 8, 0);
+    ctx.textAlign = "left";
+    ctx.fillText("R", radius + 8, 0);
+    ctx.restore();
+  }
+
+  drawLiveSpatialField(ctx, centerX, centerY, radius, telemetry, spatialState, config, compact) {
+    const length = Math.min(telemetry.left.length, telemetry.right.length);
+    if (!this.spatialMid || this.spatialMid.length !== length) {
+      this.spatialMid = new Float32Array(length);
+      this.spatialSide = new Float32Array(length);
+    }
+    for (let index = 0; index < length; index += 1) {
+      const encoded = encodeMidSide(telemetry.left[index], telemetry.right[index]);
+      this.spatialMid[index] = encoded.mid;
+      this.spatialSide[index] = encoded.side;
+    }
+    this.drawSpatialPcmRing(ctx, centerX, centerY, radius * 0.67, radius * 0.12, this.spatialMid, spatialState.angle, compact, 0.72);
+    this.drawSpatialPcmRing(ctx, centerX, centerY, radius * 0.49, radius * 0.1, this.spatialSide, -spatialState.angle, compact, 0.38);
+    this.drawSpatialTelemetryLabel(ctx, centerX, centerY, radius, `LIVE PCM  /  ${spatialState.positionCount} HRTF POSITIONS  /  ${config.panCycleSeconds} SEC ORBIT`, compact);
+  }
+
+  drawModelSpatialField(ctx, centerX, centerY, radius, pairs, spatialState, config, compact) {
+    const sampleCount = compact ? 256 : 420;
+    const left = new Float32Array(sampleCount);
+    const right = new Float32Array(sampleCount);
+    const leftGain = Math.sqrt((1 - spatialState.x) / 2);
+    const rightGain = Math.sqrt((1 + spatialState.x) / 2);
+    const level = 0.34 / Math.sqrt(pairs.length);
+    for (let index = 0; index < sampleCount; index += 1) {
+      const time = this.elapsed * 0.035 + (index / sampleCount) * 0.075;
+      for (const pair of pairs) {
+        const contour = 1 + Math.sin(TAU * pair.difference * time) * config.contourDepth;
+        const sample = Math.sin(TAU * pair.left * time) * level * contour;
+        left[index] += sample * leftGain;
+        right[index] += sample * rightGain;
+      }
+    }
+    const mid = new Float32Array(sampleCount);
+    const side = new Float32Array(sampleCount);
+    for (let index = 0; index < sampleCount; index += 1) {
+      const encoded = encodeMidSide(left[index], right[index]);
+      mid[index] = encoded.mid;
+      side[index] = encoded.side;
+    }
+    this.drawSpatialPcmRing(ctx, centerX, centerY, radius * 0.67, radius * 0.12, mid, spatialState.angle, compact, 0.68);
+    this.drawSpatialPcmRing(ctx, centerX, centerY, radius * 0.49, radius * 0.1, side, -spatialState.angle, compact, 0.32);
+    this.drawSpatialTelemetryLabel(ctx, centerX, centerY, radius, `MODEL  /  ${spatialState.positionCount} HRTF POSITIONS  /  ${config.panCycleSeconds} SEC ORBIT`, compact);
+  }
+
+  drawSpatialPcmRing(ctx, centerX, centerY, baseRadius, amplitude, samples, rotation, compact, opacity) {
+    let peak = 0;
+    for (let index = 0; index < samples.length; index += 1) peak = Math.max(peak, Math.abs(samples[index]));
+    const gain = peak > 0.0001 ? 1 / peak : 0;
+    const pointCount = compact ? 150 : 260;
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.strokeStyle = `rgba(17, 17, 17, ${opacity})`;
+    ctx.lineWidth = 1.05;
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    for (let pointIndex = 0; pointIndex <= pointCount; pointIndex += 1) {
+      const ratio = pointIndex / pointCount;
+      const sampleIndex = Math.min(samples.length - 1, Math.floor(ratio * samples.length));
+      const angle = ratio * TAU + rotation;
+      const ringRadius = baseRadius + samples[sampleIndex] * gain * amplitude;
+      const pointX = Math.sin(angle) * ringRadius;
+      const pointY = -Math.cos(angle) * ringRadius;
+      if (pointIndex === 0) ctx.moveTo(pointX, pointY);
+      else ctx.lineTo(pointX, pointY);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  drawSpatialTelemetryLabel(ctx, centerX, centerY, radius, label, compact) {
+    ctx.save();
+    ctx.fillStyle = "rgba(17, 17, 17, 0.46)";
+    ctx.font = `${compact ? 7 : 9}px "SF Mono", ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillText(label, centerX, centerY + radius + (compact ? 25 : 28));
+    ctx.restore();
+  }
+
+  drawSpatialPosition(ctx, centerX, centerY, radius, spatialState, compact) {
+    const current = spatialPoint(spatialState.angle, radius * 0.9);
+    const previous = this.spatialHistory[this.spatialHistory.length - 1];
+    const distance = previous ? Math.hypot(current.x - previous.x, current.y - previous.y) : Infinity;
+    if (this.isRunning() && distance > radius * 0.012) {
+      this.spatialHistory.push(current);
+      if (this.spatialHistory.length > SPATIAL_HISTORY_LENGTH) this.spatialHistory.shift();
+    } else if (this.spatialHistory.length === 0) {
+      this.spatialHistory.push(current);
+    }
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.lineCap = "round";
+    for (let index = 1; index < this.spatialHistory.length; index += 1) {
+      const recency = index / this.spatialHistory.length;
+      ctx.strokeStyle = `rgba(17, 17, 17, ${0.025 + recency * recency * 0.28})`;
+      ctx.lineWidth = compact ? 1 : 1.2;
+      ctx.beginPath();
+      ctx.moveTo(this.spatialHistory[index - 1].x, this.spatialHistory[index - 1].y);
+      ctx.lineTo(this.spatialHistory[index].x, this.spatialHistory[index].y);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = "rgba(17, 17, 17, 0.28)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(current.x, current.y);
+    ctx.stroke();
+
+    ctx.fillStyle = "#111";
+    ctx.beginPath();
+    ctx.arc(current.x, current.y, compact ? 4 : 5, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(17, 17, 17, 0.35)";
+    ctx.beginPath();
+    ctx.arc(current.x, current.y, compact ? 8 : 10, 0, TAU);
+    ctx.stroke();
+
+    ctx.fillStyle = "#f6f5ef";
+    ctx.strokeStyle = "#111";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(0, 0, compact ? 9 : 11, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, compact ? -5 : -7);
+    ctx.lineTo(0, compact ? -13 : -16);
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(17, 17, 17, 0.5)";
+    ctx.font = `${compact ? 7 : 8}px "SF Mono", ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillText("LISTENER", 0, compact ? 16 : 19);
+    ctx.restore();
   }
 
   drawGrid(ctx, centerY, availableHeight, compact) {

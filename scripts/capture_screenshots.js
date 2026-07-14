@@ -25,13 +25,22 @@ try {
   await mkdir("screenshots", { recursive: true });
   const browser = await chromium.launch({ args: ["--autoplay-policy=no-user-gesture-required"] });
   const captures = [
-    { name: "entrainment-desktop.png", viewport: { width: 1440, height: 1000 } },
-    { name: "entrainment-mobile.png", viewport: { width: 390, height: 844 } },
+    { name: "entrainment-desktop.png", viewport: { width: 1440, height: 1000 }, mode: "binaural" },
+    { name: "entrainment-mobile.png", viewport: { width: 390, height: 844 }, mode: "binaural" },
+    { name: "entrainment-spatial-desktop.png", viewport: { width: 1440, height: 1000 }, mode: "spatial" },
+    { name: "entrainment-spatial-mobile.png", viewport: { width: 390, height: 844 }, mode: "spatial" },
   ];
 
   for (const capture of captures) {
     const page = await browser.newPage({ viewport: capture.viewport, deviceScaleFactor: 1 });
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    if (capture.mode === "spatial") {
+      await page.locator('input[name="presentation-mode"][value="spatial"]').evaluate((input) => {
+        input.checked = true;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      await page.locator('#signal-canvas[data-visualization="spatial-soundfield"]').waitFor();
+    }
     await page.getByRole("button", { name: "Start audio" }).click();
     await page.locator("body.has-started").waitFor();
     await page.waitForTimeout(600);

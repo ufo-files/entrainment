@@ -10,6 +10,7 @@ const AudioContextClass = () => window.AudioContext || window.webkitAudioContext
 const SPATIAL_POSITION_COUNT = 12;
 const SPATIAL_CONTROL_HARMONICS = 32;
 const SPATIAL_CONTROL_TABLE_SIZE = 1024;
+const TAU = Math.PI * 2;
 
 function setParam(param, value, context, ramp = 0.04) {
   const now = context.currentTime;
@@ -267,7 +268,12 @@ export class AudioEngine {
       output,
       nodes,
       sources,
-      motion: { oscillators: sources },
+      motion: {
+        oscillators: sources,
+        anchorTime: this.context.currentTime,
+        anchorPhase: 0,
+        cycleSeconds: config.panCycleSeconds,
+      },
     };
   }
 
@@ -325,7 +331,13 @@ export class AudioEngine {
 
   updateSpatialMotion(config) {
     if (!this.carrierBus?.motion) return;
-    this.carrierBus.motion.oscillators.forEach((oscillator) => {
+    const motion = this.carrierBus.motion;
+    const now = this.context.currentTime;
+    const elapsed = Math.max(0, now - motion.anchorTime);
+    motion.anchorPhase = (motion.anchorPhase + elapsed / motion.cycleSeconds) % 1;
+    motion.anchorTime = now;
+    motion.cycleSeconds = config.panCycleSeconds;
+    motion.oscillators.forEach((oscillator) => {
       setParam(oscillator.frequency, 1 / config.panCycleSeconds, this.context);
     });
   }
@@ -400,6 +412,21 @@ export class AudioEngine {
       this.readChannel(this.rightAnalyser, this.telemetry.right);
     }
     return this.telemetry;
+  }
+
+  readSpatialState() {
+    const motion = this.carrierBus?.motion;
+    if (!motion || !this.context) return null;
+    const elapsed = Math.max(0, this.context.currentTime - motion.anchorTime);
+    const progress = (motion.anchorPhase + elapsed / motion.cycleSeconds) % 1;
+    const angle = progress * TAU;
+    return {
+      angle,
+      progress,
+      x: Math.sin(angle),
+      y: -Math.cos(angle),
+      positionCount: SPATIAL_POSITION_COUNT,
+    };
   }
 
   readChannel(analyser, target) {

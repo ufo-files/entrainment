@@ -10,6 +10,8 @@ Live app: https://ufo-files.github.io/entrainment/
 
 ![Entrainment reference signal running in the browser](screenshots/entrainment-desktop.png)
 
+![Entrainment spatial soundfield running in the browser](screenshots/entrainment-spatial-desktop.png)
+
 The app implements the portions of the patent that can be reproduced as a
 browser audio instrument:
 
@@ -21,10 +23,10 @@ browser audio instrument:
 - a deterministic pink-noise layer with cyclic panning and filtering, kept at
   least 10 dB below the carrier reference;
 - an app-defined spatial alternative that routes the base carriers through a
-  moving browser HRTF panner; and
+  fixed browser HRTF soundfield with continuous crossfading; and
 - post-volume, post-compressor left and right PCM analyser taps that drive the
-  live waveforms, normalized mid-side vectorscope, dBFS levels, and correlation
-  readout.
+  live waveforms, normalized mid-side vectorscope, spatial PCM field, dBFS
+  levels, and correlation readout.
 
 The instrument does **not** capture, infer, or reproduce EEG recordings. Carrier
 placement for the multi-pair figure programs is app-defined because the patent
@@ -73,7 +75,12 @@ Audio `PannerNode` bank with `panningModel = "HRTF"` places the carrier field at
 curves crossfade adjacent positions to create continuous motion without asking
 the browser to recalculate an audible HRTF filter in place. HRTF rendering is
 platform-dependent, so the final PCM telemetry is the authoritative view of
-what the browser produced.
+what the browser produced. Spatial mode uses a dedicated radial soundfield: its
+12 perimeter points are the real fixed HRTF positions, the moving marker is the
+current crossfade position, and the two concentric wave rings encode the live
+mid and side PCM channels. The listener, orientation, orbit trail, and
+configured cycle are control-state displays rather than inferred sound-source
+measurements.
 
 The pink layer uses seeded, deterministic pink-noise samples. A low-frequency
 cycle modulates stereo panning and filter frequency. The UI constrains the layer
@@ -82,12 +89,13 @@ to -10 dB or lower relative gain, following the patent's stated design boundary.
 Audio starts only after a user gesture, as required by modern browsers.
 
 Before audio starts, the canvas is a mathematical preview of the configured
-carrier pair. During playback, the left and right traces are drawn from the
-actual PCM stream sent to each output channel. The center field is a normalized
-stereo vectorscope. Its horizontal axis plots `(L + R) / 2` and its vertical
-axis plots `(L - R) / 2`, using a short fading history over a fixed circle and
-crosshair. This exposes channel width, phase behavior, and mono compatibility
-without presenting a scalar measurement as arbitrary shape deformation.
+carrier pair. During binaural playback, the left and right traces are drawn
+from the actual PCM stream sent to each output channel. The center field is a
+normalized stereo vectorscope. Its horizontal axis plots `(L + R) / 2` and its
+vertical axis plots `(L - R) / 2`, using a short fading history over a fixed
+circle and crosshair. Spatial playback replaces that composition with the
+radial HRTF field described above. Both views expose signal behavior without
+presenting a scalar measurement as arbitrary shape deformation.
 Absolute left, right, and difference levels remain available as dBFS readouts,
 with correlation reported separately.
 
