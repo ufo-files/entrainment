@@ -8,6 +8,7 @@ test("starts the stereo engine and switches to a three-pair program", async ({ p
   page.on("pageerror", (error) => errors.push(error.message));
 
   await page.goto("/");
+  await expect(page.locator("#signal-canvas")).toHaveAttribute("data-visualization", "mid-side-vectorscope");
   await page.getByRole("button", { name: "Start audio" }).click();
   await expect(page.locator("body")).toHaveClass(/has-started/);
   await expect(page.locator("#status")).toHaveText("Playing stereo signal");

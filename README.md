@@ -21,7 +21,8 @@ browser audio instrument:
 - a deterministic pink-noise layer with cyclic panning and filtering, kept at
   least 10 dB below the carrier reference.
 - post-volume, post-compressor left and right PCM analyser taps that drive the
-  live waveform, stereo-difference field, dBFS levels, and correlation readout.
+  live waveforms, normalized mid-side vectorscope, dBFS levels, and correlation
+  readout.
 
 The instrument does **not** capture, infer, or reproduce EEG recordings. Carrier
 placement for the multi-pair figure programs is app-defined because the patent
@@ -69,10 +70,13 @@ Audio starts only after a user gesture, as required by modern browsers.
 
 Before audio starts, the canvas is a mathematical preview of the configured
 carrier pair. During playback, the left and right traces are drawn from the
-actual PCM stream sent to each output channel. The center field maps live
-stereo-difference RMS into ring deformation and correlation into ring aspect;
-its center reports the same correlation snapshot. The field has no pointer or
-decorative rotational motion.
+actual PCM stream sent to each output channel. The center field is a normalized
+stereo vectorscope. Its horizontal axis plots `(L + R) / 2` and its vertical
+axis plots `(L - R) / 2`, using a short fading history over a fixed circle and
+crosshair. This exposes channel width, phase behavior, and mono compatibility
+without presenting a scalar measurement as arbitrary shape deformation.
+Absolute left, right, and difference levels remain available as dBFS readouts,
+with correlation reported separately.
 
 ## Project Links
 

@@ -1,6 +1,14 @@
 import { calculateTelemetryMetrics, getCarrierPairs } from "./audio-model.js";
 
 const TAU = Math.PI * 2;
+const SCOPE_HISTORY_LENGTH = 7;
+
+export function encodeMidSide(left, right) {
+  return {
+    mid: (left + right) / 2,
+    side: (left - right) / 2,
+  };
+}
 
 export class SignalVisualizer {
   constructor(canvas, getConfig, isRunning, getTelemetry, onTelemetry = () => {}) {
@@ -17,6 +25,8 @@ export class SignalVisualizer {
     this.lastTimestamp = null;
     this.lastTelemetryUpdate = 0;
     this.displayMetrics = null;
+    this.scopeHistory = [];
+    this.scopeGain = 1;
     this.reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     this.resize = this.resize.bind(this);
@@ -36,6 +46,7 @@ export class SignalVisualizer {
     this.canvas.height = Math.round(this.height * this.pixelRatio);
     this.context.setTransform(this.pixelRatio, 0, 0, this.pixelRatio, 0, 0);
     this.lastTimestamp = null;
+    this.scopeHistory = [];
   }
 
   render(timestamp) {
@@ -74,14 +85,14 @@ export class SignalVisualizer {
     ctx.fillRect(0, 0, this.width, this.height);
     this.drawGrid(ctx, centerY, availableHeight, compact);
     this.drawChannelLabels(ctx, centerY, fieldRadius, pairs, displayMetrics, compact);
+    this.drawScopeGuides(ctx, centerX, centerY, fieldRadius, compact);
     if (telemetry) {
-      this.drawLiveField(ctx, centerX, centerY, fieldRadius, metrics);
       this.drawLiveTraces(ctx, centerX, centerY, fieldRadius, telemetry, compact);
-      this.drawLiveCore(ctx, centerX, centerY, fieldRadius, displayMetrics);
+      this.drawLiveVectorscope(ctx, centerX, centerY, fieldRadius, telemetry, compact);
     } else {
-      this.drawModelField(ctx, centerX, centerY, fieldRadius, pairs, pace);
+      this.scopeHistory = [];
       this.drawModelTraces(ctx, centerX, centerY, fieldRadius, pairs, pace, compact);
-      this.drawModelCore(ctx, centerX, centerY, fieldRadius, pairs, pace);
+      this.drawModelVectorscope(ctx, centerX, centerY, fieldRadius, pairs, pace, compact);
     }
   }
 
@@ -121,25 +132,93 @@ export class SignalVisualizer {
     ctx.restore();
   }
 
-  drawLiveField(ctx, x, y, radius, metrics) {
-    const rings = Math.max(12, Math.round(radius / 9));
-    const difference = Math.min(1, metrics.differenceRms * 8);
-    const correlation = metrics.correlation;
-
+  drawScopeGuides(ctx, x, y, radius, compact) {
+    const scopeRadius = radius * 0.68;
     ctx.save();
     ctx.translate(x, y);
+    ctx.strokeStyle = "rgba(17, 17, 17, 0.18)";
     ctx.lineWidth = 1;
-    for (let ring = rings; ring >= 1; ring -= 1) {
-      const ratio = ring / rings;
-      const horizontal = radius * ratio * (1 + correlation * 0.08);
-      const vertical = radius * ratio * 0.72 * (1 - correlation * 0.08);
-      const deformation = difference * radius * (0.012 + (1 - ratio) * 0.018);
-      ctx.strokeStyle = `rgba(17, 17, 17, ${0.05 + (1 - ratio) * 0.16 + difference * 0.04})`;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, horizontal + deformation, vertical + deformation * 0.72, 0, 0, TAU);
-      ctx.stroke();
-    }
+    ctx.beginPath();
+    ctx.arc(0, 0, scopeRadius, 0, TAU);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(17, 17, 17, 0.11)";
+    ctx.beginPath();
+    ctx.moveTo(-scopeRadius, 0);
+    ctx.lineTo(scopeRadius, 0);
+    ctx.moveTo(0, -scopeRadius);
+    ctx.lineTo(0, scopeRadius);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(17, 17, 17, 0.46)";
+    ctx.font = `${compact ? 8 : 9}px "SF Mono", ui-monospace, monospace`;
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    ctx.fillText("M", scopeRadius + 7, 0);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.fillText("S", 0, -scopeRadius - 6);
+    ctx.textBaseline = "top";
+    ctx.fillText("NORMALIZED", 0, scopeRadius + 7);
     ctx.restore();
+  }
+
+  buildScopePoints(left, right, step, gain) {
+    const length = Math.min(left.length, right.length);
+    const points = [];
+    for (let index = 0; index < length; index += step) {
+      const { mid, side } = encodeMidSide(left[index], right[index]);
+      points.push({
+        x: Math.max(-1, Math.min(1, mid * gain)),
+        y: Math.max(-1, Math.min(1, side * gain)),
+      });
+    }
+    return points;
+  }
+
+  getScopeGain(left, right) {
+    let peak = 0;
+    const length = Math.min(left.length, right.length);
+    for (let index = 0; index < length; index += 4) {
+      const { mid, side } = encodeMidSide(left[index], right[index]);
+      peak = Math.max(peak, Math.abs(mid), Math.abs(side));
+    }
+    const target = peak > 0.0001 ? Math.min(12, 0.86 / peak) : 1;
+    this.scopeGain += (target - this.scopeGain) * 0.14;
+    return this.scopeGain;
+  }
+
+  drawScopePaths(ctx, centerX, centerY, radius, paths) {
+    const scopeRadius = radius * 0.68;
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.lineWidth = 1.05;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    paths.forEach((points, index) => {
+      if (points.length < 2) return;
+      const recency = (index + 1) / paths.length;
+      ctx.strokeStyle = `rgba(17, 17, 17, ${0.05 + recency * recency * 0.62})`;
+      ctx.beginPath();
+      points.forEach((point, pointIndex) => {
+        const pointX = point.x * scopeRadius;
+        const pointY = -point.y * scopeRadius;
+        if (pointIndex === 0) ctx.moveTo(pointX, pointY);
+        else ctx.lineTo(pointX, pointY);
+      });
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  drawLiveVectorscope(ctx, centerX, centerY, radius, telemetry, compact) {
+    const gain = this.getScopeGain(telemetry.left, telemetry.right);
+    const points = this.buildScopePoints(telemetry.left, telemetry.right, compact ? 10 : 7, gain);
+    if (this.isRunning()) {
+      this.scopeHistory.push(points);
+      if (this.scopeHistory.length > SCOPE_HISTORY_LENGTH) this.scopeHistory.shift();
+    } else if (this.scopeHistory.length === 0) {
+      this.scopeHistory.push(points);
+    }
+    this.drawScopePaths(ctx, centerX, centerY, radius, this.scopeHistory);
   }
 
   drawLiveTraces(ctx, centerX, centerY, radius, telemetry, compact) {
@@ -167,50 +246,6 @@ export class SignalVisualizer {
       else ctx.lineTo(startX + step, pointY);
     }
     ctx.stroke();
-  }
-
-  drawLiveCore(ctx, centerX, centerY, radius, metrics) {
-    const energy = Math.min(1, metrics.differenceRms * 8);
-    const core = radius * (0.065 + energy * 0.025);
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.fillStyle = `rgba(17, 17, 17, ${0.76 + energy * 0.2})`;
-    ctx.beginPath();
-    ctx.arc(0, 0, core, 0, TAU);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(17, 17, 17, 0.32)";
-    ctx.lineWidth = 1;
-    for (let index = 1; index <= 3; index += 1) {
-      ctx.beginPath();
-      ctx.arc(0, 0, core + index * radius * 0.05 + energy * 4, 0, TAU);
-      ctx.stroke();
-    }
-    ctx.fillStyle = "#f6f5ef";
-    ctx.font = `${Math.max(8, radius * 0.038)}px "SF Mono", ui-monospace, monospace`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("LIVE", 0, 0);
-    ctx.restore();
-  }
-
-  drawModelField(ctx, x, y, radius, pairs, pace) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.lineWidth = 1;
-    const rings = Math.max(12, Math.round(radius / 9));
-    for (let index = rings; index >= 1; index -= 1) {
-      const ratio = index / rings;
-      const beat = pairs[index % pairs.length].difference;
-      const wobble = Math.sin(pace * beat + index * 0.64) * radius * 0.018;
-      const horizontal = radius * ratio + wobble;
-      const vertical = radius * ratio * (0.72 + Math.sin(index * 0.4 + pace) * 0.04);
-      const opacity = 0.05 + (1 - ratio) * 0.14;
-      ctx.strokeStyle = `rgba(17, 17, 17, ${opacity})`;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, Math.max(1, horizontal), Math.max(1, vertical), Math.sin(pace * 0.1 + index) * 0.08, 0, TAU);
-      ctx.stroke();
-    }
-    ctx.restore();
   }
 
   drawModelTraces(ctx, centerX, centerY, radius, pairs, pace, compact) {
@@ -246,28 +281,26 @@ export class SignalVisualizer {
     ctx.stroke();
   }
 
-  drawModelCore(ctx, centerX, centerY, radius, pairs, pace) {
-    const average = pairs.reduce((sum, pair) => sum + pair.difference, 0) / pairs.length;
-    const pulse = (Math.sin(pace * average * TAU * 0.2) + 1) / 2;
-    const core = radius * (0.07 + pulse * 0.025);
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.fillStyle = `rgba(17, 17, 17, ${0.72 + pulse * 0.2})`;
-    ctx.beginPath();
-    ctx.arc(0, 0, core, 0, TAU);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(17, 17, 17, 0.32)";
-    ctx.lineWidth = 1;
-    for (let index = 1; index <= 3; index += 1) {
-      ctx.beginPath();
-      ctx.arc(0, 0, core + index * radius * 0.055 + pulse * 3, 0, TAU);
-      ctx.stroke();
+  drawModelVectorscope(ctx, centerX, centerY, radius, pairs, pace, compact) {
+    const pointCount = compact ? 180 : 260;
+    const windowSeconds = 0.075;
+    const left = new Float32Array(pointCount);
+    const right = new Float32Array(pointCount);
+    const level = 0.34 / Math.sqrt(pairs.length);
+    for (let index = 0; index < pointCount; index += 1) {
+      const time = pace * 0.035 + (index / (pointCount - 1)) * windowSeconds;
+      pairs.forEach((pair) => {
+        left[index] += Math.sin(TAU * pair.left * time) * level;
+        right[index] += Math.sin(TAU * pair.right * time) * level;
+      });
     }
-    ctx.fillStyle = "#f6f5ef";
-    ctx.font = `${Math.max(9, radius * 0.042)}px "SF Mono", ui-monospace, monospace`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(`${average.toFixed(average % 1 ? 1 : 0)} HZ`, 0, 0);
-    ctx.restore();
+    let peak = 0;
+    for (let index = 0; index < pointCount; index += 1) {
+      const { mid, side } = encodeMidSide(left[index], right[index]);
+      peak = Math.max(peak, Math.abs(mid), Math.abs(side));
+    }
+    const gain = peak > 0 ? 0.86 / peak : 1;
+    const points = this.buildScopePoints(left, right, 1, gain);
+    this.drawScopePaths(ctx, centerX, centerY, radius, [points]);
   }
 }
