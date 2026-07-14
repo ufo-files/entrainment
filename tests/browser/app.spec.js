@@ -11,6 +11,7 @@ test("starts the stereo engine and switches to a three-pair program", async ({ p
   await expect(page.locator("#signal-canvas")).toHaveAttribute("data-visualization", "mid-side-vectorscope");
   await page.getByRole("button", { name: "Start audio" }).click();
   await expect(page.locator("body")).toHaveClass(/has-started/);
+  await expect(page.locator("#start-overlay")).toBeHidden();
   await expect(page.locator("#status")).toHaveText("Playing binaural signal");
   await expect(page.getByRole("button", { name: "Pause audio" })).toBeVisible();
   await expect(page.locator("#telemetry-mode")).toHaveText("Live PCM");
@@ -57,6 +58,25 @@ test("starts the stereo engine and switches to a three-pair program", async ({ p
   await expect(page.locator("#signal-canvas")).toHaveAttribute("data-visualization", "mid-side-vectorscope");
 
   expect(errors).toEqual([]);
+});
+
+test("startup controls remain below the signal graph", async ({ page }) => {
+  for (const viewport of [
+    { width: 1440, height: 1000 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/");
+
+    const dock = page.locator("#start-overlay");
+    await expect(dock).toBeVisible();
+    await expect(dock.getByText("Use stereo headphones. Begin at low volume.")).toBeVisible();
+
+    const dockBox = await dock.boundingBox();
+    expect(dockBox).not.toBeNull();
+    expect(dockBox.y).toBeGreaterThan(viewport.height * 0.65);
+    expect(dockBox.y + dockBox.height).toBeLessThanOrEqual(viewport.height);
+  }
 });
 
 test("mobile drawers remain inside the viewport", async ({ page }) => {

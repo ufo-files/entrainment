@@ -245,22 +245,32 @@ input[type="range"] {
 
 .start-overlay {
   position: fixed;
-  inset: 0;
+  right: 12px;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 114px);
+  left: 12px;
+  left: max(12px, env(safe-area-inset-left));
   z-index: 7;
-  display: grid;
-  place-items: center;
+  display: flex;
+  justify-content: center;
   pointer-events: none;
-  transition: opacity 180ms ease;
+  transition: opacity 180ms ease, visibility 0s linear 180ms;
 }
 
 .has-started .start-overlay {
   opacity: 0;
+  visibility: hidden;
 }
 
 .start-group {
-  display: grid;
-  justify-items: center;
-  gap: 12px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   pointer-events: auto;
 }
 
@@ -268,6 +278,7 @@ input[type="range"] {
   margin: 0;
   color: var(--muted);
   font-size: 11px;
+  white-space: nowrap;
 }
 
 .start-button {
@@ -762,13 +773,30 @@ fieldset select {
     height: 36px;
   }
 
+  .start-overlay {
+    right: 8px;
+    right: max(8px, env(safe-area-inset-right));
+    bottom: calc(max(8px, env(safe-area-inset-bottom)) + 46px);
+    left: 8px;
+    left: max(8px, env(safe-area-inset-left));
+  }
+
   .start-group {
-    margin-top: -20px;
+    width: min(100%, 360px);
+    gap: 10px;
   }
 
   .start-group p {
-    max-width: 240px;
-    text-align: center;
+    white-space: normal;
+  }
+
+  .start-button {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .start-button span:last-child {
+    white-space: nowrap;
   }
 
   .controls-panel {
