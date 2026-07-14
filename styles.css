@@ -587,8 +587,13 @@ fieldset select {
 .pair-readout {
   display: grid;
   align-content: center;
-  gap: 5px;
+  gap: 9px;
   border-left: 1px solid var(--soft-line);
+}
+
+.pair-list {
+  display: grid;
+  gap: 5px;
 }
 
 .pair-item {
@@ -614,6 +619,29 @@ fieldset select {
 .pair-item i {
   color: var(--muted);
   font-style: normal;
+}
+
+.telemetry-readout {
+  display: grid;
+  grid-template-columns: 44px 1fr 1fr auto;
+  align-items: baseline;
+  gap: 7px;
+  padding-top: 7px;
+  border-top: 1px solid var(--soft-line);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.telemetry-readout > span,
+.telemetry-readout small {
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.telemetry-readout b {
+  font-size: 9px;
+  font-weight: 400;
+  white-space: nowrap;
 }
 
 @media (max-width: 960px) {

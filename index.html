@@ -10,7 +10,7 @@
 </head>
 <body>
   <main aria-labelledby="app-title">
-    <canvas id="signal-canvas" aria-label="Animated stereo carrier and differential frequency visualization"></canvas>
+    <canvas id="signal-canvas" aria-label="Stereo signal model and live PCM telemetry visualization"></canvas>
 
     <header class="topbar">
       <section class="brand" aria-label="Application status">
@@ -34,7 +34,7 @@
 
       <div class="session-readout" aria-label="Session elapsed time">
         <span id="session-time">00:00</span>
-        <small id="pair-count">1 carrier pair</small>
+        <small><span id="pair-count">1 carrier pair</span> / <span id="telemetry-mode" data-mode="model">Model</span></small>
       </div>
 
       <label class="field header-volume" for="volume">
@@ -139,6 +139,7 @@
 
       <section class="about-panel" id="about-panel" hidden>
         <p>This experiment implements separate stereo carrier pairs and a lower-level, cyclically panned pink-noise layer described in US5213562A.</p>
+        <p>During playback, the side traces read the final left and right PCM channels. The center field maps their sample-by-sample difference; dBFS and correlation values use the same live analyser snapshot.</p>
         <p>It does not capture or reproduce EEG data, and the patent's claimed effects are not presented here as established medical outcomes.</p>
         <a href="https://patents.google.com/patent/US5213562A/en">Read US5213562A</a>
         <p class="safety-note">Not a medical device. Stop if you feel discomfort. Do not use while driving or operating machinery.</p>
@@ -180,7 +181,15 @@
           <small>1.5 / 2 / 4 Hz</small>
         </button>
       </div>
-      <div class="pair-readout" id="pair-readout" aria-label="Active left and right frequencies"></div>
+      <div class="pair-readout" aria-label="Active signal and live output telemetry">
+        <div class="pair-list" id="pair-readout"></div>
+        <div class="telemetry-readout" aria-label="Live output levels">
+          <span>Output</span>
+          <b>L <output id="left-level">--</output> dBFS</b>
+          <b>R <output id="right-level">--</output> dBFS</b>
+          <small>Corr <output id="stereo-correlation">--</output></small>
+        </div>
+      </div>
     </section>
   </main>
 

@@ -19,7 +19,9 @@ export class AudioEngine {
     this.onError = onError;
     this.context = null;
     this.master = null;
-    this.analyser = null;
+    this.leftAnalyser = null;
+    this.rightAnalyser = null;
+    this.telemetry = null;
     this.carrierBus = null;
     this.pairs = [];
     this.pink = null;
@@ -47,10 +49,6 @@ export class AudioEngine {
     this.master = this.context.createGain();
     this.master.gain.value = 0;
 
-    this.analyser = this.context.createAnalyser();
-    this.analyser.fftSize = 2048;
-    this.analyser.smoothingTimeConstant = 0.72;
-
     const compressor = this.context.createDynamicsCompressor();
     compressor.threshold.value = -18;
     compressor.knee.value = 12;
@@ -58,9 +56,30 @@ export class AudioEngine {
     compressor.attack.value = 0.01;
     compressor.release.value = 0.3;
 
-    this.master.connect(this.analyser);
-    this.analyser.connect(compressor);
-    compressor.connect(this.context.destination);
+    const splitter = this.context.createChannelSplitter(2);
+    const outputMerger = this.context.createChannelMerger(2);
+    this.leftAnalyser = this.context.createAnalyser();
+    this.rightAnalyser = this.context.createAnalyser();
+    for (const analyser of [this.leftAnalyser, this.rightAnalyser]) {
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0;
+      analyser.channelCount = 1;
+      analyser.channelCountMode = "explicit";
+    }
+
+    this.master.connect(compressor);
+    compressor.connect(splitter);
+    splitter.connect(this.leftAnalyser, 0, 0);
+    splitter.connect(this.rightAnalyser, 1, 0);
+    this.leftAnalyser.connect(outputMerger, 0, 0);
+    this.rightAnalyser.connect(outputMerger, 0, 1);
+    outputMerger.connect(this.context.destination);
+
+    this.telemetry = {
+      left: new Float32Array(this.leftAnalyser.fftSize),
+      right: new Float32Array(this.rightAnalyser.fftSize),
+      sampleRate: this.context.sampleRate,
+    };
   }
 
   applyConfig(config, rebuild = false) {
@@ -224,6 +243,27 @@ export class AudioEngine {
     if (!this.context) return;
     await this.context.resume();
     this.running = true;
+  }
+
+  readTelemetry() {
+    if (!this.telemetry || !this.leftAnalyser || !this.rightAnalyser) return null;
+    if (this.context.state === "running") {
+      this.readChannel(this.leftAnalyser, this.telemetry.left);
+      this.readChannel(this.rightAnalyser, this.telemetry.right);
+    }
+    return this.telemetry;
+  }
+
+  readChannel(analyser, target) {
+    if (typeof analyser.getFloatTimeDomainData === "function") {
+      analyser.getFloatTimeDomainData(target);
+      return;
+    }
+    const bytes = new Uint8Array(target.length);
+    analyser.getByteTimeDomainData(bytes);
+    for (let index = 0; index < target.length; index += 1) {
+      target[index] = (bytes[index] - 128) / 128;
+    }
   }
 
   destroyCarriers() {

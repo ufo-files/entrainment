@@ -12,10 +12,18 @@ test("starts the stereo engine and switches to a three-pair program", async ({ p
   await expect(page.locator("body")).toHaveClass(/has-started/);
   await expect(page.locator("#status")).toHaveText("Playing stereo signal");
   await expect(page.getByRole("button", { name: "Pause audio" })).toBeVisible();
+  await expect(page.locator("#telemetry-mode")).toHaveText("Live PCM");
+  await expect(page.locator("#left-level")).not.toHaveText("--");
+  await expect(page.locator("#right-level")).not.toHaveText("--");
+  await expect.poll(async () => Number(await page.locator("#left-level").textContent())).toBeGreaterThan(-100);
+  await expect.poll(async () => Number(await page.locator("#right-level").textContent())).toBeGreaterThan(-100);
+  await expect.poll(async () => Number(await page.locator("#stereo-correlation").textContent())).toBeGreaterThanOrEqual(-1);
+  await expect.poll(async () => Number(await page.locator("#stereo-correlation").textContent())).toBeLessThanOrEqual(1);
 
   await page.getByRole("button", { name: "Pause audio" }).click();
   await expect(page.locator("#status")).toHaveText("Audio paused");
   await expect(page.getByRole("button", { name: "Resume audio" })).toBeVisible();
+  await expect(page.locator("#telemetry-mode")).toHaveText("Paused PCM");
 
   await page.getByRole("button", { name: "Resume audio" }).click();
   await expect(page.locator("#status")).toHaveText("Playing stereo signal");

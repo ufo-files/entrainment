@@ -20,6 +20,8 @@ browser audio instrument:
 - amplitude contouring; and
 - a deterministic pink-noise layer with cyclic panning and filtering, kept at
   least 10 dB below the carrier reference.
+- post-volume, post-compressor left and right PCM analyser taps that drive the
+  live waveform, stereo-difference field, dBFS levels, and correlation readout.
 
 The instrument does **not** capture, infer, or reproduce EEG recordings. Carrier
 placement for the multi-pair figure programs is app-defined because the patent
@@ -64,6 +66,11 @@ cycle modulates stereo panning and filter frequency. The UI constrains the layer
 to -10 dB or lower relative gain, following the patent's stated design boundary.
 
 Audio starts only after a user gesture, as required by modern browsers.
+
+Before audio starts, the canvas is a mathematical preview of the configured
+carrier pair. During playback, the left and right traces are drawn from the
+actual PCM stream sent to each output channel. The center field maps the live
+sample-by-sample left-minus-right signal; its center reports stereo correlation.
 
 ## Project Links
 

@@ -14,6 +14,10 @@ const elements = {
   status: document.querySelector("#status"),
   sessionTime: document.querySelector("#session-time"),
   pairCount: document.querySelector("#pair-count"),
+  telemetryMode: document.querySelector("#telemetry-mode"),
+  leftLevel: document.querySelector("#left-level"),
+  rightLevel: document.querySelector("#right-level"),
+  stereoCorrelation: document.querySelector("#stereo-correlation"),
   start: document.querySelector("#start"),
   startOverlay: document.querySelector("#start-overlay"),
   controlsToggle: document.querySelector("#controls-menu-toggle"),
@@ -58,6 +62,20 @@ new SignalVisualizer(
   document.querySelector("#signal-canvas"),
   () => config,
   () => engine.running || !document.body.classList.contains("has-started"),
+  () => engine.readTelemetry(),
+  (metrics, mode) => {
+    elements.telemetryMode.textContent = mode === "live" ? "Live PCM" : mode === "paused" ? "Paused PCM" : "Model";
+    elements.telemetryMode.dataset.mode = mode;
+    if (!metrics) {
+      elements.leftLevel.textContent = "--";
+      elements.rightLevel.textContent = "--";
+      elements.stereoCorrelation.textContent = "--";
+      return;
+    }
+    elements.leftLevel.textContent = metrics.leftDbfs.toFixed(1);
+    elements.rightLevel.textContent = metrics.rightDbfs.toFixed(1);
+    elements.stereoCorrelation.textContent = metrics.correlation.toFixed(2);
+  },
 );
 
 function syncConfigFromControls() {

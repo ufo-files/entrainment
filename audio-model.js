@@ -104,6 +104,52 @@ export function formatElapsed(totalSeconds) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+export function calculateTelemetryMetrics(leftSamples, rightSamples) {
+  const length = Math.min(leftSamples?.length ?? 0, rightSamples?.length ?? 0);
+  if (length === 0) {
+    return {
+      leftRms: 0,
+      rightRms: 0,
+      differenceRms: 0,
+      leftDbfs: -120,
+      rightDbfs: -120,
+      correlation: 0,
+    };
+  }
+
+  let leftEnergy = 0;
+  let rightEnergy = 0;
+  let differenceEnergy = 0;
+  let crossProduct = 0;
+  for (let index = 0; index < length; index += 1) {
+    const left = Number(leftSamples[index]) || 0;
+    const right = Number(rightSamples[index]) || 0;
+    const difference = left - right;
+    leftEnergy += left * left;
+    rightEnergy += right * right;
+    differenceEnergy += difference * difference;
+    crossProduct += left * right;
+  }
+
+  const leftRms = Math.sqrt(leftEnergy / length);
+  const rightRms = Math.sqrt(rightEnergy / length);
+  const differenceRms = Math.sqrt(differenceEnergy / length);
+  const denominator = Math.sqrt(leftEnergy * rightEnergy);
+  const correlation = denominator > 1e-12
+    ? Math.max(-1, Math.min(1, crossProduct / denominator))
+    : 0;
+  const toDbfs = (rms) => Math.max(-120, 20 * Math.log10(Math.max(rms, 1e-6)));
+
+  return {
+    leftRms,
+    rightRms,
+    differenceRms,
+    leftDbfs: toDbfs(leftRms),
+    rightDbfs: toDbfs(rightRms),
+    correlation,
+  };
+}
+
 export function createDeterministicPinkNoise(length, seed = 5213562) {
   const size = Math.max(1, Math.floor(length));
   const samples = new Float32Array(size);
