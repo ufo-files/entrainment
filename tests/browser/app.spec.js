@@ -11,9 +11,10 @@ test("starts the stereo engine and switches to a three-pair program", async ({ p
   await expect(page.locator("#signal-canvas")).toHaveAttribute("data-visualization", "mid-side-vectorscope");
   await page.getByRole("button", { name: "Start audio" }).click();
   await expect(page.locator("body")).toHaveClass(/has-started/);
-  await expect(page.locator("#start-overlay")).toBeHidden();
+  await expect(page.locator("#bottom-transport")).toBeVisible();
+  await expect(page.locator("#bottom-transport-toggle")).toHaveAccessibleName("Pause audio");
   await expect(page.locator("#status")).toHaveText("Playing binaural signal");
-  await expect(page.getByRole("button", { name: "Pause audio" })).toBeVisible();
+  await expect(page.locator("#transport-toggle")).toHaveAccessibleName("Pause audio");
   await expect(page.locator("#telemetry-mode")).toHaveText("Live PCM");
   await expect(page.locator("#left-level")).not.toHaveText("--");
   await expect(page.locator("#right-level")).not.toHaveText("--");
@@ -24,13 +25,15 @@ test("starts the stereo engine and switches to a three-pair program", async ({ p
   await expect.poll(async () => Number(await page.locator("#stereo-correlation").textContent())).toBeGreaterThanOrEqual(-1);
   await expect.poll(async () => Number(await page.locator("#stereo-correlation").textContent())).toBeLessThanOrEqual(1);
 
-  await page.getByRole("button", { name: "Pause audio" }).click();
+  await page.locator("#bottom-transport-toggle").click();
   await expect(page.locator("#status")).toHaveText("Audio paused");
-  await expect(page.getByRole("button", { name: "Resume audio" })).toBeVisible();
+  await expect(page.locator("#bottom-transport-toggle")).toHaveAccessibleName("Resume audio");
+  await expect(page.locator("#transport-toggle")).toHaveAccessibleName("Resume audio");
   await expect(page.locator("#telemetry-mode")).toHaveText("Paused PCM");
 
-  await page.getByRole("button", { name: "Resume audio" }).click();
+  await page.locator("#transport-toggle").click();
   await expect(page.locator("#status")).toHaveText("Playing binaural signal");
+  await expect(page.locator("#bottom-transport-toggle")).toHaveAccessibleName("Pause audio");
 
   await page.getByRole("button", { name: /Fig\. 3B/ }).click();
   await expect(page.locator("#pair-readout .pair-item")).toHaveCount(3);
@@ -60,7 +63,7 @@ test("starts the stereo engine and switches to a three-pair program", async ({ p
   expect(errors).toEqual([]);
 });
 
-test("startup controls remain below the signal graph", async ({ page }) => {
+test("bottom transport remains below the signal graph", async ({ page }) => {
   for (const viewport of [
     { width: 1440, height: 1000 },
     { width: 390, height: 844 },
@@ -68,7 +71,7 @@ test("startup controls remain below the signal graph", async ({ page }) => {
     await page.setViewportSize(viewport);
     await page.goto("/");
 
-    const dock = page.locator("#start-overlay");
+    const dock = page.locator("#bottom-transport");
     await expect(dock).toBeVisible();
     await expect(dock.getByText("Use stereo headphones. Begin at low volume.")).toBeVisible();
 

@@ -243,7 +243,7 @@ input[type="range"] {
   background: var(--chip);
 }
 
-.start-overlay {
+.bottom-transport {
   position: fixed;
   right: 12px;
   right: max(12px, env(safe-area-inset-right));
@@ -254,15 +254,9 @@ input[type="range"] {
   display: flex;
   justify-content: center;
   pointer-events: none;
-  transition: opacity 180ms ease, visibility 0s linear 180ms;
 }
 
-.has-started .start-overlay {
-  opacity: 0;
-  visibility: hidden;
-}
-
-.start-group {
+.bottom-transport-group {
   display: flex;
   align-items: center;
   gap: 16px;
@@ -274,14 +268,14 @@ input[type="range"] {
   pointer-events: auto;
 }
 
-.start-group p {
+.bottom-transport-group p {
   margin: 0;
   color: var(--muted);
   font-size: 11px;
   white-space: nowrap;
 }
 
-.start-button {
+.bottom-transport-button {
   display: inline-flex;
   min-width: 156px;
   height: 48px;
@@ -773,7 +767,7 @@ fieldset select {
     height: 36px;
   }
 
-  .start-overlay {
+  .bottom-transport {
     right: 8px;
     right: max(8px, env(safe-area-inset-right));
     bottom: calc(max(8px, env(safe-area-inset-bottom)) + 46px);
@@ -781,21 +775,21 @@ fieldset select {
     left: max(8px, env(safe-area-inset-left));
   }
 
-  .start-group {
+  .bottom-transport-group {
     width: min(100%, 360px);
     gap: 10px;
   }
 
-  .start-group p {
+  .bottom-transport-group p {
     white-space: normal;
   }
 
-  .start-button {
+  .bottom-transport-button {
     padding-right: 14px;
     padding-left: 14px;
   }
 
-  .start-button span:last-child {
+  .bottom-transport-button span:last-child {
     white-space: nowrap;
   }
 

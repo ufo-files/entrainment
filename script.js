@@ -20,8 +20,8 @@ const elements = {
   rightLevel: document.querySelector("#right-level"),
   differenceLevel: document.querySelector("#difference-level"),
   stereoCorrelation: document.querySelector("#stereo-correlation"),
-  start: document.querySelector("#start"),
-  startOverlay: document.querySelector("#start-overlay"),
+  bottomTransportToggle: document.querySelector("#bottom-transport-toggle"),
+  bottomTransportLabel: document.querySelector("#bottom-transport-label"),
   controlsToggle: document.querySelector("#controls-menu-toggle"),
   controlsPanel: document.querySelector("#controls-panel"),
   aboutToggle: document.querySelector("#about-toggle"),
@@ -172,6 +172,10 @@ function setProgramsOpen(open) {
 
 function setRunning(running) {
   document.body.classList.toggle("audio-paused", !running);
+  elements.bottomTransportToggle.setAttribute("aria-label", running ? "Pause audio" : "Resume audio");
+  elements.bottomTransportToggle.title = running ? "Pause audio" : "Resume audio";
+  elements.bottomTransportLabel.textContent = running ? "Pause audio" : "Resume audio";
+  elements.bottomTransportToggle.querySelector(".control-mark").className = `control-mark ${running ? "pause-mark" : "play-mark"}`;
   elements.transportToggle.hidden = false;
   elements.transportToggle.setAttribute("aria-label", running ? "Pause audio" : "Resume audio");
   elements.transportToggle.title = running ? "Pause audio" : "Resume audio";
@@ -191,7 +195,6 @@ function updateClock() {
 async function startAudio() {
   await engine.start(config);
   document.body.classList.add("has-started");
-  elements.startOverlay.setAttribute("aria-hidden", "true");
   startedAt = performance.now();
   setRunning(true);
   updateClock();
@@ -234,7 +237,7 @@ function resetSession() {
   updateClock();
 }
 
-elements.start.addEventListener("click", () => startAudio());
+elements.bottomTransportToggle.addEventListener("click", () => toggleAudio());
 elements.transportToggle.addEventListener("click", () => toggleAudio());
 elements.audioToggle.addEventListener("click", () => toggleAudio());
 elements.reset.addEventListener("click", resetSession);
