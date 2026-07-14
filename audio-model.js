@@ -33,6 +33,7 @@ export const PROGRAMS = Object.freeze({
 
 export const DEFAULT_CONFIG = Object.freeze({
   program: "reference",
+  presentationMode: "binaural",
   carrierFrequency: 100,
   beatFrequency: 4,
   contourShape: "sine",
@@ -44,6 +45,7 @@ export const DEFAULT_CONFIG = Object.freeze({
 });
 
 const CONTOUR_SHAPES = new Set(["sine", "triangle", "square", "flat"]);
+const PRESENTATION_MODES = new Set(["binaural", "spatial"]);
 
 export function clamp(value, minimum, maximum) {
   const number = Number(value);
@@ -53,12 +55,16 @@ export function clamp(value, minimum, maximum) {
 
 export function sanitizeConfig(input = {}) {
   const program = Object.hasOwn(PROGRAMS, input.program) ? input.program : DEFAULT_CONFIG.program;
+  const presentationMode = PRESENTATION_MODES.has(input.presentationMode)
+    ? input.presentationMode
+    : DEFAULT_CONFIG.presentationMode;
   const contourShape = CONTOUR_SHAPES.has(input.contourShape)
     ? input.contourShape
     : DEFAULT_CONFIG.contourShape;
 
   return {
     program,
+    presentationMode,
     carrierFrequency: clamp(input.carrierFrequency ?? DEFAULT_CONFIG.carrierFrequency, 40, 1000),
     beatFrequency: clamp(input.beatFrequency ?? DEFAULT_CONFIG.beatFrequency, 0.25, 30),
     contourShape,
@@ -68,6 +74,13 @@ export function sanitizeConfig(input = {}) {
     panCycleSeconds: clamp(input.panCycleSeconds ?? DEFAULT_CONFIG.panCycleSeconds, 6, 60),
     volume: clamp(input.volume ?? DEFAULT_CONFIG.volume, 0, 0.5),
   };
+}
+
+export function getSpatialCarriers(config) {
+  return getCarrierPairs(config).map((pair) => ({
+    frequency: pair.left,
+    contourFrequency: pair.difference,
+  }));
 }
 
 export function getCarrierPairs(config) {

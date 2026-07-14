@@ -11,7 +11,7 @@ test("starts the stereo engine and switches to a three-pair program", async ({ p
   await expect(page.locator("#signal-canvas")).toHaveAttribute("data-visualization", "mid-side-vectorscope");
   await page.getByRole("button", { name: "Start audio" }).click();
   await expect(page.locator("body")).toHaveClass(/has-started/);
-  await expect(page.locator("#status")).toHaveText("Playing stereo signal");
+  await expect(page.locator("#status")).toHaveText("Playing binaural signal");
   await expect(page.getByRole("button", { name: "Pause audio" })).toBeVisible();
   await expect(page.locator("#telemetry-mode")).toHaveText("Live PCM");
   await expect(page.locator("#left-level")).not.toHaveText("--");
@@ -29,7 +29,7 @@ test("starts the stereo engine and switches to a three-pair program", async ({ p
   await expect(page.locator("#telemetry-mode")).toHaveText("Paused PCM");
 
   await page.getByRole("button", { name: "Resume audio" }).click();
-  await expect(page.locator("#status")).toHaveText("Playing stereo signal");
+  await expect(page.locator("#status")).toHaveText("Playing binaural signal");
 
   await page.getByRole("button", { name: /Fig\. 3B/ }).click();
   await expect(page.locator("#pair-readout .pair-item")).toHaveCount(3);
@@ -43,6 +43,13 @@ test("starts the stereo engine and switches to a three-pair program", async ({ p
   await expect(page.locator("#active-program-name")).toHaveText("Custom carrier pair");
   await page.locator("#pink-level").fill("-20");
   await expect(page.locator("#pink-level-output")).toHaveText("-20 dB");
+  await page.getByLabel("Spatial", { exact: true }).check();
+  await expect(page.locator("#signal-canvas")).toHaveAttribute("data-presentation-mode", "spatial");
+  await expect(page.locator("#pair-count")).toHaveText("1 spatial carrier");
+  await expect(page.locator("#program-summary")).toContainText("carrier / 4 Hz contour");
+  await expect(page.locator("#status")).toHaveText("Playing spatial signal");
+  await expect.poll(async () => Number(await page.locator("#left-level").textContent())).toBeGreaterThan(-100);
+  await expect.poll(async () => Number(await page.locator("#right-level").textContent())).toBeGreaterThan(-100);
 
   expect(errors).toEqual([]);
 });

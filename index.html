@@ -73,17 +73,36 @@
       </div>
 
       <form class="controls" id="controls" aria-label="Audio synthesis controls">
+        <fieldset>
+          <legend>Presentation</legend>
+          <div class="segmented-control" role="radiogroup" aria-label="Presentation mode">
+            <label>
+              <input type="radio" name="presentation-mode" value="binaural" checked>
+              <span>Binaural</span>
+            </label>
+            <label>
+              <input type="radio" name="presentation-mode" value="spatial">
+              <span>Spatial</span>
+            </label>
+          </div>
+          <label class="field slider-field" for="pan-cycle">
+            <span>Motion cycle</span>
+            <input id="pan-cycle" type="range" min="6" max="60" value="24" step="1">
+            <output id="pan-cycle-output" for="pan-cycle">24 sec</output>
+          </label>
+        </fieldset>
+
         <fieldset id="custom-fields">
-          <legend>Custom carrier pair</legend>
+          <legend id="custom-fields-legend">Custom carrier pair</legend>
           <label class="field" for="carrier-frequency">
-            <span>Left carrier</span>
+            <span id="carrier-frequency-label">Left carrier</span>
             <span class="number-control">
               <input id="carrier-frequency" type="number" min="40" max="1000" value="100" step="0.5">
               <em>Hz</em>
             </span>
           </label>
           <label class="field" for="beat-frequency">
-            <span>Difference</span>
+            <span id="beat-frequency-label">Difference</span>
             <span class="number-control">
               <input id="beat-frequency" type="number" min="0.25" max="30" value="4" step="0.25">
               <em>Hz</em>
@@ -121,11 +140,6 @@
             <input id="pink-level" type="range" min="-30" max="-10" value="-18" step="1">
             <output id="pink-level-output" for="pink-level">-18 dB</output>
           </label>
-          <label class="field slider-field" for="pan-cycle">
-            <span>Pan cycle</span>
-            <input id="pan-cycle" type="range" min="6" max="60" value="24" step="1">
-            <output id="pan-cycle-output" for="pan-cycle">24 sec</output>
-          </label>
         </fieldset>
 
         <div class="panel-actions">
@@ -138,7 +152,8 @@
       </form>
 
       <section class="about-panel" id="about-panel" hidden>
-        <p>This experiment implements separate stereo carrier pairs and a lower-level, cyclically panned pink-noise layer described in US5213562A.</p>
+        <p>Binaural mode implements separate stereo carrier pairs and a lower-level, cyclically panned pink-noise layer described in US5213562A.</p>
+        <p>Spatial mode is an app-defined alternative. It sends each base carrier through a browser HRTF spatializer, moves the summed carrier field around the listener, and uses the configured difference as its amplitude-contour rate. HRTF rendering varies by browser and device.</p>
         <p>During playback, the side traces read the final left and right PCM channels. The center is a normalized mid-side vectorscope: common left-plus-right energy runs horizontally and stereo-difference energy runs vertically. The fixed circle and crosshair are references, not signal data.</p>
         <p>It does not capture or reproduce EEG data, and the patent's claimed effects are not presented here as established medical outcomes.</p>
         <a href="https://patents.google.com/patent/US5213562A/en">Read US5213562A</a>

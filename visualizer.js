@@ -84,15 +84,15 @@ export class SignalVisualizer {
     ctx.fillStyle = "#f6f5ef";
     ctx.fillRect(0, 0, this.width, this.height);
     this.drawGrid(ctx, centerY, availableHeight, compact);
-    this.drawChannelLabels(ctx, centerY, fieldRadius, pairs, displayMetrics, compact);
+    this.drawChannelLabels(ctx, centerY, fieldRadius, pairs, config, displayMetrics, compact);
     this.drawScopeGuides(ctx, centerX, centerY, fieldRadius, compact);
     if (telemetry) {
       this.drawLiveTraces(ctx, centerX, centerY, fieldRadius, telemetry, compact);
       this.drawLiveVectorscope(ctx, centerX, centerY, fieldRadius, telemetry, compact);
     } else {
       this.scopeHistory = [];
-      this.drawModelTraces(ctx, centerX, centerY, fieldRadius, pairs, pace, compact);
-      this.drawModelVectorscope(ctx, centerX, centerY, fieldRadius, pairs, pace, compact);
+      this.drawModelTraces(ctx, centerX, centerY, fieldRadius, pairs, config, pace, compact);
+      this.drawModelVectorscope(ctx, centerX, centerY, fieldRadius, pairs, config, pace, compact);
     }
   }
 
@@ -113,14 +113,18 @@ export class SignalVisualizer {
     ctx.restore();
   }
 
-  drawChannelLabels(ctx, centerY, radius, pairs, metrics, compact) {
+  drawChannelLabels(ctx, centerY, radius, pairs, config, metrics, compact) {
     const primary = pairs[0];
     const leftLabel = metrics
       ? `L  LIVE  ${metrics.leftDbfs.toFixed(1)} DBFS`
-      : `L  MODEL  ${primary.left.toFixed(primary.left % 1 ? 1 : 0)} HZ`;
+      : config.presentationMode === "spatial"
+        ? "L  MODEL  HRTF"
+        : `L  MODEL  ${primary.left.toFixed(primary.left % 1 ? 1 : 0)} HZ`;
     const rightLabel = metrics
       ? `R  LIVE  ${metrics.rightDbfs.toFixed(1)} DBFS`
-      : `R  MODEL  ${primary.right.toFixed(primary.right % 1 ? 1 : 0)} HZ`;
+      : config.presentationMode === "spatial"
+        ? "R  MODEL  HRTF"
+        : `R  MODEL  ${primary.right.toFixed(primary.right % 1 ? 1 : 0)} HZ`;
     ctx.save();
     ctx.fillStyle = "rgba(17, 17, 17, 0.58)";
     ctx.font = `${compact ? 9 : 10}px "SF Mono", ui-monospace, monospace`;
@@ -248,19 +252,40 @@ export class SignalVisualizer {
     ctx.stroke();
   }
 
-  drawModelTraces(ctx, centerX, centerY, radius, pairs, pace, compact) {
+  drawModelTraces(ctx, centerX, centerY, radius, pairs, config, pace, compact) {
     const edge = compact ? 18 : 42;
     const gap = radius * 0.86;
     const leftEnd = centerX - gap;
     const rightStart = centerX + gap;
     const amplitudes = compact ? 13 : 18;
+    const pan = Math.sin((pace / 0.55) * TAU / config.panCycleSeconds);
+    const panAngle = ((pan + 1) * Math.PI) / 4;
+    const leftSpatialGain = Math.cos(panAngle);
+    const rightSpatialGain = Math.sin(panAngle);
 
     ctx.save();
     ctx.lineWidth = 1.15;
     pairs.forEach((pair, pairIndex) => {
       const offset = (pairIndex - (pairs.length - 1) / 2) * (compact ? 22 : 28);
-      this.drawModelWave(ctx, edge, leftEnd, centerY + offset, pair.left, pace, amplitudes);
-      this.drawModelWave(ctx, rightStart, this.width - edge, centerY + offset, pair.right, pace, amplitudes);
+      const spatial = config.presentationMode === "spatial";
+      this.drawModelWave(
+        ctx,
+        edge,
+        leftEnd,
+        centerY + offset,
+        pair.left,
+        pace,
+        amplitudes * (spatial ? leftSpatialGain : 1),
+      );
+      this.drawModelWave(
+        ctx,
+        rightStart,
+        this.width - edge,
+        centerY + offset,
+        spatial ? pair.left : pair.right,
+        pace,
+        amplitudes * (spatial ? rightSpatialGain : 1),
+      );
     });
     ctx.restore();
   }
@@ -281,17 +306,24 @@ export class SignalVisualizer {
     ctx.stroke();
   }
 
-  drawModelVectorscope(ctx, centerX, centerY, radius, pairs, pace, compact) {
+  drawModelVectorscope(ctx, centerX, centerY, radius, pairs, config, pace, compact) {
     const pointCount = compact ? 180 : 260;
     const windowSeconds = 0.075;
     const left = new Float32Array(pointCount);
     const right = new Float32Array(pointCount);
     const level = 0.34 / Math.sqrt(pairs.length);
+    const pan = Math.sin((pace / 0.55) * TAU / config.panCycleSeconds);
+    const panAngle = ((pan + 1) * Math.PI) / 4;
+    const leftSpatialGain = Math.cos(panAngle);
+    const rightSpatialGain = Math.sin(panAngle);
     for (let index = 0; index < pointCount; index += 1) {
       const time = pace * 0.035 + (index / (pointCount - 1)) * windowSeconds;
       pairs.forEach((pair) => {
-        left[index] += Math.sin(TAU * pair.left * time) * level;
-        right[index] += Math.sin(TAU * pair.right * time) * level;
+        const contour = 1 + Math.sin(TAU * pair.difference * time) * config.contourDepth;
+        left[index] += Math.sin(TAU * pair.left * time) * level * contour
+          * (config.presentationMode === "spatial" ? leftSpatialGain : 1);
+        right[index] += Math.sin(TAU * (config.presentationMode === "spatial" ? pair.left : pair.right) * time)
+          * level * contour * (config.presentationMode === "spatial" ? rightSpatialGain : 1);
       });
     }
     let peak = 0;

@@ -387,6 +387,48 @@ fieldset .field {
   grid-template-columns: 1fr minmax(132px, 1.15fr);
 }
 
+.segmented-control {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.segmented-control label {
+  position: relative;
+  min-width: 0;
+}
+
+.segmented-control input {
+  position: absolute;
+  opacity: 0;
+}
+
+.segmented-control span {
+  display: flex;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.segmented-control label + label span {
+  border-left: 0;
+}
+
+.segmented-control input:checked + span {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.segmented-control input:focus-visible + span {
+  outline: 1px solid var(--ink);
+  outline-offset: 2px;
+}
+
 .number-control {
   display: grid;
   grid-template-columns: 1fr 34px;

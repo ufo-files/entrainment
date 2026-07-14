@@ -2,6 +2,7 @@ import {
   createDeterministicPinkNoise,
   dbToGain,
   getCarrierPairs,
+  getSpatialCarriers,
   sanitizeConfig,
 } from "./audio-model.js";
 
@@ -93,6 +94,7 @@ export class AudioEngine {
     if (
       rebuild
       || pairSignature !== previousSignature
+      || clean.presentationMode !== this.config?.presentationMode
       || clean.contourShape !== this.config?.contourShape
       || needsModulation !== hasModulation
     ) {
@@ -100,6 +102,7 @@ export class AudioEngine {
     } else {
       this.updateCarrierModulation(clean);
     }
+    this.updateSpatialMotion(clean);
 
     if (rebuild || !this.pink) this.rebuildPinkNoise(clean);
     this.updatePinkNoise(clean);
@@ -109,6 +112,14 @@ export class AudioEngine {
 
   rebuildCarriers(config) {
     this.destroyCarriers();
+    if (config.presentationMode === "spatial") {
+      this.rebuildSpatialCarriers(config);
+      return;
+    }
+    this.rebuildBinauralCarriers(config);
+  }
+
+  rebuildBinauralCarriers(config) {
     const pairs = getCarrierPairs(config);
     const merger = this.context.createChannelMerger(2);
     const bus = this.context.createGain();
@@ -151,18 +162,122 @@ export class AudioEngine {
       rightOscillator.start();
 
       return {
-        leftOscillator,
-        rightOscillator,
-        leftGain,
-        rightGain,
-        leftModulation,
-        rightModulation,
+        sources: [leftOscillator, rightOscillator, modulation].filter(Boolean),
+        nodes: [leftGain, rightGain, leftModulation, rightModulation],
+        modulationGains: [leftModulation, rightModulation],
         modulation,
         pairLevel,
       };
     });
 
-    this.carrierBus = { merger, bus };
+    this.carrierBus = { nodes: [merger, bus], sources: [], motion: null };
+  }
+
+  rebuildSpatialCarriers(config) {
+    const carriers = getSpatialCarriers(config);
+    const bus = this.context.createGain();
+    const pairLevel = 0.34 / Math.sqrt(carriers.length);
+    const spatializer = this.createSpatializer(config);
+    bus.channelCount = 1;
+    bus.channelCountMode = "explicit";
+    bus.connect(spatializer.input);
+    spatializer.output.connect(this.master);
+
+    this.pairs = carriers.map((carrier) => {
+      const oscillator = this.context.createOscillator();
+      const gain = this.context.createGain();
+      const modulationGain = this.context.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.value = carrier.frequency;
+      gain.gain.value = pairLevel;
+      oscillator.connect(gain);
+      gain.connect(bus);
+
+      const modulation = this.createContourModulation(
+        carrier.contourFrequency,
+        config.contourShape,
+        config.contourDepth,
+      );
+      if (modulation) {
+        modulationGain.gain.value = pairLevel * config.contourDepth;
+        modulation.connect(modulationGain);
+        modulationGain.connect(gain.gain);
+        modulation.start();
+      }
+      oscillator.start();
+
+      return {
+        sources: [oscillator, modulation].filter(Boolean),
+        nodes: [gain, modulationGain],
+        modulationGains: [modulationGain],
+        modulation,
+        pairLevel,
+      };
+    });
+
+    this.carrierBus = {
+      nodes: [bus, ...spatializer.nodes],
+      sources: spatializer.sources,
+      motion: spatializer.motion,
+    };
+  }
+
+  createSpatializer(config) {
+    const cycleFrequency = 1 / config.panCycleSeconds;
+    const panner = this.context.createPanner();
+    panner.panningModel = "HRTF";
+    panner.distanceModel = "inverse";
+    panner.refDistance = 1;
+    panner.maxDistance = 10;
+    panner.rolloffFactor = 0;
+
+    if (panner.positionX && panner.positionZ) {
+      const xLfo = this.context.createOscillator();
+      const zLfo = this.context.createOscillator();
+      const xDepth = this.context.createGain();
+      const zDepth = this.context.createGain();
+      const cosine = this.context.createPeriodicWave(
+        new Float32Array([0, 1]),
+        new Float32Array([0, 0]),
+        { disableNormalization: true },
+      );
+      xLfo.type = "sine";
+      zLfo.setPeriodicWave(cosine);
+      xLfo.frequency.value = cycleFrequency;
+      zLfo.frequency.value = cycleFrequency;
+      xDepth.gain.value = 1.4;
+      zDepth.gain.value = 1.4;
+      panner.positionY.value = 0;
+      xLfo.connect(xDepth);
+      zLfo.connect(zDepth);
+      xDepth.connect(panner.positionX);
+      zDepth.connect(panner.positionZ);
+      xLfo.start();
+      zLfo.start();
+      return {
+        input: panner,
+        output: panner,
+        nodes: [panner, xDepth, zDepth],
+        sources: [xLfo, zLfo],
+        motion: { oscillators: [xLfo, zLfo] },
+      };
+    }
+
+    const fallback = this.context.createStereoPanner();
+    const panLfo = this.context.createOscillator();
+    const panDepth = this.context.createGain();
+    panLfo.frequency.value = cycleFrequency;
+    panDepth.gain.value = 0.92;
+    panLfo.connect(panDepth);
+    panDepth.connect(fallback.pan);
+    panLfo.start();
+    return {
+      input: fallback,
+      output: fallback,
+      nodes: [fallback, panDepth],
+      sources: [panLfo],
+      motion: { oscillators: [panLfo] },
+    };
   }
 
   createContourModulation(frequency, shape, depth) {
@@ -177,8 +292,14 @@ export class AudioEngine {
     this.pairs.forEach((pair) => {
       if (!pair.modulation) return;
       const amount = pair.pairLevel * config.contourDepth;
-      setParam(pair.leftModulation.gain, amount, this.context);
-      setParam(pair.rightModulation.gain, amount, this.context);
+      pair.modulationGains.forEach((gain) => setParam(gain.gain, amount, this.context));
+    });
+  }
+
+  updateSpatialMotion(config) {
+    if (!this.carrierBus?.motion) return;
+    this.carrierBus.motion.oscillators.forEach((oscillator) => {
+      setParam(oscillator.frequency, 1 / config.panCycleSeconds, this.context);
     });
   }
 
@@ -268,20 +389,20 @@ export class AudioEngine {
 
   destroyCarriers() {
     this.pairs.forEach((pair) => {
-      for (const source of [pair.leftOscillator, pair.rightOscillator, pair.modulation]) {
+      for (const source of pair.sources) {
         if (!source) continue;
         try { source.stop(); } catch {}
         source.disconnect();
       }
-      pair.leftGain.disconnect();
-      pair.rightGain.disconnect();
-      pair.leftModulation.disconnect();
-      pair.rightModulation.disconnect();
+      pair.nodes.forEach((node) => node.disconnect());
     });
     this.pairs = [];
     if (this.carrierBus) {
-      this.carrierBus.merger.disconnect();
-      this.carrierBus.bus.disconnect();
+      this.carrierBus.sources.forEach((source) => {
+        try { source.stop(); } catch {}
+        source.disconnect();
+      });
+      this.carrierBus.nodes.forEach((node) => node.disconnect());
       this.carrierBus = null;
     }
   }

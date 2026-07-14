@@ -9,6 +9,7 @@ import {
   dbToGain,
   formatElapsed,
   getCarrierPairs,
+  getSpatialCarriers,
   sanitizeConfig,
 } from "../audio-model.js";
 
@@ -35,9 +36,26 @@ test("figure programs preserve the documented differential frequency sets", () =
   }
 });
 
+test("spatial presentation keeps base carriers and converts differences to contour rates", () => {
+  assert.deepEqual(getSpatialCarriers(DEFAULT_CONFIG), [
+    { frequency: 100, contourFrequency: 4 },
+  ]);
+  assert.deepEqual(
+    getSpatialCarriers({ ...DEFAULT_CONFIG, program: "figure-3b" }),
+    [
+      { frequency: 110, contourFrequency: 1.5 },
+      { frequency: 165, contourFrequency: 4 },
+      { frequency: 220, contourFrequency: 6 },
+    ],
+  );
+  assert.equal(sanitizeConfig({ ...DEFAULT_CONFIG, presentationMode: "spatial" }).presentationMode, "spatial");
+  assert.equal(sanitizeConfig({ ...DEFAULT_CONFIG, presentationMode: "surround" }).presentationMode, "binaural");
+});
+
 test("configuration sanitization clamps unsafe or unsupported input", () => {
   assert.deepEqual(sanitizeConfig({
     program: "unknown",
+    presentationMode: "unsupported",
     carrierFrequency: 2,
     beatFrequency: 90,
     contourShape: "sawtooth",

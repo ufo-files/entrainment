@@ -19,7 +19,9 @@ browser audio instrument:
   and 3H;
 - amplitude contouring; and
 - a deterministic pink-noise layer with cyclic panning and filtering, kept at
-  least 10 dB below the carrier reference.
+  least 10 dB below the carrier reference;
+- an app-defined spatial alternative that routes the base carriers through a
+  moving browser HRTF panner; and
 - post-volume, post-compressor left and right PCM analyser taps that drive the
   live waveforms, normalized mid-side vectorscope, dBFS levels, and correlation
   readout.
@@ -30,9 +32,9 @@ names differential frequencies without providing reproducible source EEG data.
 
 ## Use
 
-Stereo headphones are required to preserve separate left and right carrier
-signals. Start at low volume. Stop if you feel discomfort, and do not use the
-app while driving or operating machinery.
+Stereo headphones are required to preserve either the separate binaural
+carriers or the HRTF spatial cues. Start at low volume. Stop if you feel
+discomfort, and do not use the app while driving or operating machinery.
 
 This is an experimental audio tool, not a medical device. Effects described in
 the patent are historical patent claims and are not presented by UFO Files as
@@ -57,10 +59,20 @@ npm run screenshots
 
 ## Signal Model
 
-For each pair, the browser creates one sine oscillator routed only to the left
-channel and another routed only to the right. Their frequency difference is the
-displayed beat frequency. Multi-pair programs sum three independently routed
-pairs at gain scaled by the square root of the pair count.
+In Binaural mode, the browser creates one sine oscillator routed only to the
+left channel and another routed only to the right for each pair. Their
+frequency difference is the displayed beat frequency. Multi-pair programs sum
+three independently routed pairs at gain scaled by the square root of the pair
+count. This is the patent-inspired signal path and remains the default.
+
+Spatial mode is an app-defined alternate presentation, not a behavior specified
+by the patent. Each configured base carrier is amplitude-contoured at its
+corresponding difference frequency. The carriers are summed to mono, then a Web
+Audio `PannerNode` with `panningModel = "HRTF"` moves the carrier field on a
+constant-radius horizontal orbit around the listener. Browsers without
+automatable HRTF coordinates fall back to equal-power stereo panning. HRTF
+rendering is platform-dependent, so the final PCM telemetry is the authoritative
+view of what the browser produced.
 
 The pink layer uses seeded, deterministic pink-noise samples. A low-frequency
 cycle modulates stereo panning and filter frequency. The UI constrains the layer

@@ -10,6 +10,7 @@ import { AudioEngine } from "./audio-engine.js";
 import { SignalVisualizer } from "./visualizer.js";
 
 const elements = {
+  signalCanvas: document.querySelector("#signal-canvas"),
   appSwitcher: document.querySelector("#app-switcher"),
   status: document.querySelector("#status"),
   sessionTime: document.querySelector("#session-time"),
@@ -31,6 +32,10 @@ const elements = {
   programSummary: document.querySelector("#program-summary"),
   pairReadout: document.querySelector("#pair-readout"),
   customFields: document.querySelector("#custom-fields"),
+  customFieldsLegend: document.querySelector("#custom-fields-legend"),
+  presentationModes: [...document.querySelectorAll('input[name="presentation-mode"]')],
+  carrierFrequencyLabel: document.querySelector("#carrier-frequency-label"),
+  beatFrequencyLabel: document.querySelector("#beat-frequency-label"),
   carrierFrequency: document.querySelector("#carrier-frequency"),
   beatFrequency: document.querySelector("#beat-frequency"),
   contourShape: document.querySelector("#contour-shape"),
@@ -84,6 +89,7 @@ new SignalVisualizer(
 function syncConfigFromControls() {
   config = sanitizeConfig({
     ...config,
+    presentationMode: elements.presentationModes.find((input) => input.checked)?.value,
     carrierFrequency: elements.carrierFrequency.value,
     beatFrequency: elements.beatFrequency.value,
     contourShape: elements.contourShape.value,
@@ -95,6 +101,7 @@ function syncConfigFromControls() {
   });
   renderState();
   engine.applyConfig(config);
+  if (engine.running) elements.status.textContent = `Playing ${config.presentationMode} signal`;
 }
 
 function selectProgram(programId) {
@@ -112,21 +119,34 @@ function selectProgram(programId) {
 function renderState() {
   const program = PROGRAMS[config.program];
   const pairs = getCarrierPairs(config);
+  const isSpatial = config.presentationMode === "spatial";
   const isModifiedReference = config.program === "reference"
     && (config.carrierFrequency !== DEFAULT_CONFIG.carrierFrequency || config.beatFrequency !== DEFAULT_CONFIG.beatFrequency);
   elements.activeProgramName.textContent = isModifiedReference ? "Custom carrier pair" : program.name;
   elements.customFields.disabled = config.program !== "reference";
-  elements.programSummary.textContent = config.program === "reference"
-    ? `${formatFrequency(pairs[0].left)} left / ${formatFrequency(pairs[0].right)} right`
-    : program.citation;
-  elements.pairCount.textContent = `${pairs.length} carrier ${pairs.length === 1 ? "pair" : "pairs"}`;
+  elements.customFieldsLegend.textContent = isSpatial ? "Custom spatial carrier" : "Custom carrier pair";
+  elements.carrierFrequencyLabel.textContent = isSpatial ? "Base carrier" : "Left carrier";
+  elements.beatFrequencyLabel.textContent = isSpatial ? "Contour rate" : "Difference";
+  elements.signalCanvas.dataset.presentationMode = config.presentationMode;
+  elements.programSummary.textContent = isSpatial
+    ? pairs.length === 1
+      ? `${formatFrequency(pairs[0].left)} carrier / ${formatFrequency(pairs[0].difference)} contour`
+      : `${pairs.length} carriers / ${pairs.map((pair) => formatFrequency(pair.difference)).join(" / ")} contours`
+    : config.program === "reference"
+      ? `${formatFrequency(pairs[0].left)} left / ${formatFrequency(pairs[0].right)} right`
+      : program.citation;
+  elements.pairCount.textContent = isSpatial
+    ? `${pairs.length} spatial ${pairs.length === 1 ? "carrier" : "carriers"}`
+    : `${pairs.length} carrier ${pairs.length === 1 ? "pair" : "pairs"}`;
   elements.contourDepthOutput.textContent = `${Math.round(config.contourDepth * 100)}%`;
   elements.pinkLevelOutput.textContent = `${config.pinkLevelDb} dB`;
   elements.panCycleOutput.textContent = `${config.panCycleSeconds} sec`;
   elements.pairReadout.replaceChildren(...pairs.map((pair, index) => {
     const item = document.createElement("div");
     item.className = "pair-item";
-    item.innerHTML = `<span>Pair ${index + 1}</span><b>${formatFrequency(pair.left)} <i aria-hidden="true">/</i> ${formatFrequency(pair.right)}</b><small>&Delta; ${formatFrequency(pair.difference)}</small>`;
+    item.innerHTML = isSpatial
+      ? `<span>Carrier ${index + 1}</span><b>${formatFrequency(pair.left)}</b><small>Contour ${formatFrequency(pair.difference)}</small>`
+      : `<span>Pair ${index + 1}</span><b>${formatFrequency(pair.left)} <i aria-hidden="true">/</i> ${formatFrequency(pair.right)}</b><small>&Delta; ${formatFrequency(pair.difference)}</small>`;
     return item;
   }));
 }
@@ -150,7 +170,9 @@ function setRunning(running) {
   elements.transportToggle.querySelector(".control-mark").className = `control-mark ${running ? "pause-mark" : "play-mark"}`;
   elements.audioToggleLabel.textContent = running ? "Pause" : "Resume";
   elements.audioToggle.querySelector(".control-mark").className = `control-mark ${running ? "pause-mark" : "play-mark"}`;
-  elements.status.textContent = running ? "Playing stereo signal" : "Audio paused";
+  elements.status.textContent = running
+    ? `Playing ${config.presentationMode} signal`
+    : "Audio paused";
 }
 
 function updateClock() {
@@ -197,6 +219,9 @@ function resetSession() {
   elements.pinkLevel.value = config.pinkLevelDb;
   elements.panCycle.value = config.panCycleSeconds;
   elements.volume.value = config.volume;
+  elements.presentationModes.forEach((input) => {
+    input.checked = input.value === config.presentationMode;
+  });
   selectProgram(config.program);
   updateClock();
 }
@@ -221,6 +246,9 @@ elements.appSwitcher.addEventListener("change", (event) => {
 });
 elements.programButtons.forEach((button) => {
   button.addEventListener("click", () => selectProgram(button.dataset.program));
+});
+elements.presentationModes.forEach((input) => {
+  input.addEventListener("change", syncConfigFromControls);
 });
 
 for (const input of [
