@@ -68,11 +68,12 @@ count. This is the patent-inspired signal path and remains the default.
 Spatial mode is an app-defined alternate presentation, not a behavior specified
 by the patent. Each configured base carrier is amplitude-contoured at its
 corresponding difference frequency. The carriers are summed to mono, then a Web
-Audio `PannerNode` with `panningModel = "HRTF"` moves the carrier field on a
-constant-radius horizontal orbit around the listener. Browsers without
-automatable HRTF coordinates fall back to equal-power stereo panning. HRTF
-rendering is platform-dependent, so the final PCM telemetry is the authoritative
-view of what the browser produced.
+Audio `PannerNode` bank with `panningModel = "HRTF"` places the carrier field at
+12 fixed points on a constant-radius horizontal orbit. Equal-power control
+curves crossfade adjacent positions to create continuous motion without asking
+the browser to recalculate an audible HRTF filter in place. HRTF rendering is
+platform-dependent, so the final PCM telemetry is the authoritative view of
+what the browser produced.
 
 The pink layer uses seeded, deterministic pink-noise samples. A low-frequency
 cycle modulates stereo panning and filter frequency. The UI constrains the layer

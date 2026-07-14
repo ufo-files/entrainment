@@ -77,3 +77,45 @@ test("mobile drawers remain inside the viewport", async ({ page }) => {
   expect(controlsBox.x).toBeGreaterThanOrEqual(0);
   expect(controlsBox.x + controlsBox.width).toBeLessThanOrEqual(390);
 });
+
+test("spatial HRTF motion remains free of sample discontinuities", async ({ page }) => {
+  await page.goto("/");
+  const metrics = await page.evaluate(async () => {
+    const { AudioEngine } = await import("/audio-engine.js");
+    const sampleRate = 48000;
+    const context = new OfflineAudioContext(2, sampleRate * 4, sampleRate);
+    const engine = new AudioEngine();
+    engine.context = context;
+    const spatializer = engine.createSpatializer({ panCycleSeconds: 24 });
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.frequency.value = 100;
+    gain.gain.value = 0.34;
+    oscillator.connect(gain);
+    gain.connect(spatializer.input);
+    spatializer.output.connect(context.destination);
+    oscillator.start();
+    const buffer = await context.startRendering();
+
+    return [0, 1].map((channel) => {
+      const samples = buffer.getChannelData(channel);
+      let roughness = 0;
+      let maxJump = 0;
+      for (let index = 2; index < samples.length; index += 1) {
+        const jump = samples[index] - samples[index - 1];
+        const previousJump = samples[index - 1] - samples[index - 2];
+        roughness += (jump - previousJump) ** 2;
+        maxJump = Math.max(maxJump, Math.abs(jump));
+      }
+      return {
+        roughness: Math.sqrt(roughness / samples.length),
+        maxJump,
+      };
+    });
+  });
+
+  for (const channel of metrics) {
+    expect(channel.roughness).toBeLessThan(0.00015);
+    expect(channel.maxJump).toBeLessThan(0.015);
+  }
+});

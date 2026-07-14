@@ -7,6 +7,9 @@ import {
 } from "./audio-model.js";
 
 const AudioContextClass = () => window.AudioContext || window.webkitAudioContext;
+const SPATIAL_POSITION_COUNT = 12;
+const SPATIAL_CONTROL_HARMONICS = 32;
+const SPATIAL_CONTROL_TABLE_SIZE = 1024;
 
 function setParam(param, value, context, ramp = 0.04) {
   const now = context.currentTime;
@@ -224,59 +227,83 @@ export class AudioEngine {
 
   createSpatializer(config) {
     const cycleFrequency = 1 / config.panCycleSeconds;
-    const panner = this.context.createPanner();
-    panner.panningModel = "HRTF";
-    panner.distanceModel = "inverse";
-    panner.refDistance = 1;
-    panner.maxDistance = 10;
-    panner.rolloffFactor = 0;
+    const input = this.context.createGain();
+    const output = this.context.createGain();
+    const nodes = [input, output];
+    const sources = [];
+    const stepAngle = (Math.PI * 2) / SPATIAL_POSITION_COUNT;
+    output.gain.value = 0.66;
 
-    if (panner.positionX && panner.positionZ) {
-      const xLfo = this.context.createOscillator();
-      const zLfo = this.context.createOscillator();
-      const xDepth = this.context.createGain();
-      const zDepth = this.context.createGain();
-      const cosine = this.context.createPeriodicWave(
-        new Float32Array([0, 1]),
-        new Float32Array([0, 0]),
-        { disableNormalization: true },
-      );
-      xLfo.type = "sine";
-      zLfo.setPeriodicWave(cosine);
-      xLfo.frequency.value = cycleFrequency;
-      zLfo.frequency.value = cycleFrequency;
-      xDepth.gain.value = 1.4;
-      zDepth.gain.value = 1.4;
+    for (let index = 0; index < SPATIAL_POSITION_COUNT; index += 1) {
+      const angle = index * stepAngle;
+      const panner = this.context.createPanner();
+      const gain = this.context.createGain();
+      const lfo = this.context.createOscillator();
+      const control = this.createSpatialWeightWave(angle, stepAngle);
+
+      panner.panningModel = "HRTF";
+      panner.distanceModel = "inverse";
+      panner.refDistance = 1;
+      panner.maxDistance = 10;
+      panner.rolloffFactor = 0;
+      panner.positionX.value = Math.sin(angle) * 1.4;
       panner.positionY.value = 0;
-      xLfo.connect(xDepth);
-      zLfo.connect(zDepth);
-      xDepth.connect(panner.positionX);
-      zDepth.connect(panner.positionZ);
-      xLfo.start();
-      zLfo.start();
-      return {
-        input: panner,
-        output: panner,
-        nodes: [panner, xDepth, zDepth],
-        sources: [xLfo, zLfo],
-        motion: { oscillators: [xLfo, zLfo] },
-      };
+      panner.positionZ.value = -Math.cos(angle) * 1.4;
+      gain.gain.value = control.mean;
+      lfo.setPeriodicWave(control.wave);
+      lfo.frequency.value = cycleFrequency;
+
+      input.connect(panner);
+      panner.connect(gain);
+      gain.connect(output);
+      lfo.connect(gain.gain);
+      lfo.start();
+      nodes.push(panner, gain);
+      sources.push(lfo);
     }
 
-    const fallback = this.context.createStereoPanner();
-    const panLfo = this.context.createOscillator();
-    const panDepth = this.context.createGain();
-    panLfo.frequency.value = cycleFrequency;
-    panDepth.gain.value = 0.92;
-    panLfo.connect(panDepth);
-    panDepth.connect(fallback.pan);
-    panLfo.start();
     return {
-      input: fallback,
-      output: fallback,
-      nodes: [fallback, panDepth],
-      sources: [panLfo],
-      motion: { oscillators: [panLfo] },
+      input,
+      output,
+      nodes,
+      sources,
+      motion: { oscillators: sources },
+    };
+  }
+
+  createSpatialWeightWave(centerAngle, stepAngle) {
+    const values = new Float64Array(SPATIAL_CONTROL_TABLE_SIZE);
+    let mean = 0;
+    for (let index = 0; index < values.length; index += 1) {
+      const angle = (index * Math.PI * 2) / values.length;
+      const distance = Math.abs(Math.atan2(
+        Math.sin(angle - centerAngle),
+        Math.cos(angle - centerAngle),
+      ));
+      const value = distance <= stepAngle
+        ? Math.cos((distance / stepAngle) * Math.PI / 2)
+        : 0;
+      values[index] = value;
+      mean += value / values.length;
+    }
+
+    const real = new Float32Array(SPATIAL_CONTROL_HARMONICS + 1);
+    const imaginary = new Float32Array(SPATIAL_CONTROL_HARMONICS + 1);
+    for (let harmonic = 1; harmonic <= SPATIAL_CONTROL_HARMONICS; harmonic += 1) {
+      let cosine = 0;
+      let sine = 0;
+      for (let index = 0; index < values.length; index += 1) {
+        const phase = (index * Math.PI * 2) / values.length;
+        cosine += values[index] * Math.cos(harmonic * phase);
+        sine += values[index] * Math.sin(harmonic * phase);
+      }
+      real[harmonic] = (2 * cosine) / values.length;
+      imaginary[harmonic] = (2 * sine) / values.length;
+    }
+
+    return {
+      mean,
+      wave: this.context.createPeriodicWave(real, imaginary, { disableNormalization: true }),
     };
   }
 
